@@ -1,0 +1,6 @@
+@GoGreen_HostAddress = http://localhost:5070
+
+GET {{GoGreen_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
