@@ -48,9 +48,9 @@ builder.Services.AddSignalR();
 
 builder.Services.AddIdentity<User, Role>(options =>
 {
-    options.Password.RequireLowercase = false;
-    options.Password.RequireUppercase = false;
-    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireLowercase = true;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireNonAlphanumeric = true;
     options.Password.RequiredLength = 9;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -132,6 +132,17 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+
+    var roleManager = services.GetRequiredService<RoleManager<Role>>();
+    var userManager = services.GetRequiredService<UserManager<User>>();
+
+    await DbSeed.SeedRolesAsync(roleManager);
+    await DbSeed.SeedAdminAsync(userManager);
+}
 
 app.UseSwagger();
 app.UseSwaggerUI();

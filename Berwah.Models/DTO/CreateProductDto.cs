@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Berwah.Models.Enum;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -18,6 +19,8 @@ namespace Berwah.Models.DTO
         public int Stock { get; set; }
         public string Location { get; set; } = string.Empty;
         public int SubCategoryId { get; set; }
+        public ProductCondition Condition { get; set; } = ProductCondition.NotApplicable;
+
         public IFormFile? ImageFile { get; set; }
     }
 }

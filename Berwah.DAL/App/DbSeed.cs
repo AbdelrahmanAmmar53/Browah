@@ -45,16 +45,17 @@ namespace Berwah.DAL.App
                     Email = adminEmail,
                     EmailConfirmed = true,
 
-                    FirstName = "System",
-                    LastName = "Admin",
-                    //BirthDay = DateTime.Now,
-                    //Gender = "Male",
+                    FirstName = "Admin",
+                    SecondName = "Admin",
+                    ThirdName = "Ahmed",
+                    LastName = "Browah",
+
                     PhoneNumber = "01116363262",
                     Address = "Alex",
-                    UserType = 0
+                    UserType = Models.Enum.UserType.Admin
                 };
 
-                var result = await userManager.CreateAsync(newAdmin, "Admin@123");
+                var result = await userManager.CreateAsync(newAdmin, "Admin@1234");
 
                 if (result.Succeeded)
                 {

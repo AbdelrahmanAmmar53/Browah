@@ -3,15 +3,27 @@
     public class ProductCardDto
     {
         public int Id { get; set; }
-        public string Name { get; set; }
-        public string ImageUrl { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+
         public decimal Price { get; set; }
         public decimal? DiscountedPrice { get; set; }
-        public bool IsInStock { get; set; }
-        public bool IsFavorite { get; set; }
-        public string CategoryName { get; set; }
-        public string Description { get; set; }
-        public string Location { get; set; }
-        public DateTime CreeatedAt { get; set; }
+
+        public string Currency { get; set; } = "EGP";
+        public string Location { get; set; } = string.Empty;
+        public string? ImageUrl { get; set; }
+
+        public int SubCategoryId { get; set; }
+        public string SubCategoryName { get; set; } = string.Empty;
+        public string MainCategoryName { get; set; } = string.Empty;
+
+        public string Condition { get; set; } = string.Empty; 
+        public int UserId { get; set; }
+        public string SellerName { get; set; } = string.Empty;
+        public bool IsSellerVerified { get; set; }
+
+        public bool Stock { get; set; }
+
+        public DateTime CreatedAt { get; set; }
     }
 }

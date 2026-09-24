@@ -2,6 +2,7 @@
 using Berwah.DAL.App;
 using Berwah.DAL.Repository.IRepository;
 using Berwah.Models.DTO;
+using Berwah.Models.Enum;
 using Berwah.Models.Models;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -43,33 +44,43 @@ namespace Berwah.BL.Service
 
         public async Task CreateProductAsync(int userId, CreateProductDto dto)
         {
-            // 1. جلب إعدادات العمولة الحالية المحددة من الأدمن
-            var settings = await _context.PlatFormSettings.FirstOrDefaultAsync()
-                           ?? new PlatFormSetting { CommissionValue = 2.5m, IsPercentage = false };
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) throw new KeyNotFoundException("User not found");
 
-            decimal commission = 0;
+            // 1. تحديد حالة المنتج تلقائياً
+            ProductCondition finalCondition;
 
-            // 2. حساب قيمة العمولة
-            if (settings.IsPercentage)
+            if (user.UserType == UserType.Merchant)
             {
-                commission = dto.Price * (settings.CommissionValue / 100m);
+                // التاجر منتجاته دائماً NotApplicable أو New تلقائياً
+                finalCondition = ProductCondition.NotApplicable;
             }
             else
             {
-                commission = settings.CommissionValue; 
+                // المستخدم العادي: إذا أرسل Condition نأخذها، وإلا الافتراضي New
+                finalCondition = dto.Condition;
             }
 
+            // 2. حساب العمولة
+            var settings = await _context.PlatFormSettings.FirstOrDefaultAsync()
+                           ?? new PlatFormSetting { CommissionValue = 2.5m, IsPercentage = false };
 
+            decimal commission = settings.IsPercentage
+                ? dto.Price * (settings.CommissionValue / 100m)
+                : settings.CommissionValue;
+
+            // 3. إنشاء المنتج
             var product = new Product
             {
                 Name = dto.Name,
                 Description = dto.Description,
-                OriginalPrice = dto.Price,                     
-                CommissionAmount = commission,                
-                Price = dto.Price + commission,                
+                OriginalPrice = dto.Price,
+                CommissionAmount = commission,
+                Price = dto.Price + commission,
                 Stock = dto.Stock,
                 Location = dto.Location,
                 SubCategoryId = dto.SubCategoryId,
+                Condition = finalCondition,
                 UserId = userId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -112,11 +123,11 @@ namespace Berwah.BL.Service
                 Description = p.Description,
                 Price = p.Price,
                 DiscountedPrice = p.Discount,
-                IsInStock = p.Stock > 0,
-                CategoryName = p.Category?.Name ?? "",
+                Stock = p.Stock > 0,
+                SubCategoryId = p.SubCategoryId,
                 ImageUrl = p.Image?.Url ?? "",
                 Location = p.Location,
-               // CreatedAt = p.CreatedAt
+                CreatedAt = p.CreatedAt
             };
         }
     }

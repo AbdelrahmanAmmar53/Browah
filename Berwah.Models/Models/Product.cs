@@ -1,8 +1,10 @@
-﻿using System;
+﻿using Berwah.Models.Enum;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -29,6 +31,7 @@ namespace Berwah.Models.Models
         public string Currency { get; set; } = "EGP";
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public string Location { get; set; }
+        public ProductCondition Condition { get; set; } = ProductCondition.NotApplicable;
         //public string ImgUrl { get; set; }
         public int? ImageId { get; set; }
         [AllowNull]

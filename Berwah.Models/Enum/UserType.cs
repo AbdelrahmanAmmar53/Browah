@@ -8,8 +8,10 @@ namespace Berwah.Models.Enum
 {
     public enum UserType
     {
+        Admin,
         User,
         Merchant,
-        Delivery 
+        Delivery,
+        Staff
     }
 }

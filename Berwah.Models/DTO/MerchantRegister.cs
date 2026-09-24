@@ -20,8 +20,8 @@ namespace Berwah.Models.DTO
         public string? DeliveryTimeSpan { get; set; }
         public decimal? MinimumOrder { get; set; }
 
-        [Required(ErrorMessage = "المحافظة والحي المطلوبين")]
-        public string AddressDetails { get; set; } 
+        //[Required(ErrorMessage = "المحا]
+        //public string AddressDetails { get; set; } 
 
         public string? WorkHours { get; set; }
         public bool AcceptOrdersAutomatically { get; set; }
