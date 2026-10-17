@@ -31,6 +31,7 @@ namespace Berwah.Models.Models
         public string Currency { get; set; } = "EGP";
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public string Location { get; set; }
+        public bool IsActive { get; set; } = true;
         public ProductCondition Condition { get; set; } = ProductCondition.NotApplicable;
         //public string ImgUrl { get; set; }
         public int? ImageId { get; set; }

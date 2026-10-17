@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Berwah.Models.Enum;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,5 +12,6 @@ namespace Berwah.Models.DTO
     {
         public string Name { get; set; }
         public IFormFile? IconFile { get; set; }
+        public CategoryType CategoryType { get; set; }
     }
 }

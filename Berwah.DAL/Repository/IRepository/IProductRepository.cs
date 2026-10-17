@@ -1,4 +1,5 @@
-﻿using Berwah.Models.Models;
+﻿using Berwah.Models.DTO;
+using Berwah.Models.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +19,7 @@ namespace Berwah.DAL.Repository.IRepository
         Task<IEnumerable<Product>> GetProductsBySubCategoryIdAsync(int subCategoryId);
         Task TrackViewAsync(int productId);
         Task<IEnumerable<Product>> GetRecentlyViewedAsync(int count);
+        Task<(IEnumerable<Product> Items, int TotalCount)> SearchProductsAsync(SearchProductDto searchDto);
         Task SaveChangesAsync();
     }
 }

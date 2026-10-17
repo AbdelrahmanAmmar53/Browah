@@ -1,4 +1,5 @@
 ﻿using Berwah.BL.Service.IService;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,11 +14,16 @@ namespace Berwah.Controllers
         {
             _homeService = homeService;
         }
+
+        [Authorize]
         [HttpGet("GetHomeData")]
         public async Task<IActionResult> GetHomeData()
         {
-            var homeData = await _homeService.GetHomeDataAsync();
-            return Ok(homeData);
+           
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            var result = await _homeService.GetHomeDataAsync(userId);
+            return Ok(result);
         }
     }
 }

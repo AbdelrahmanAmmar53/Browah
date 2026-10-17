@@ -16,5 +16,7 @@ namespace Berwah.Models.Models
 
         public int UserId { get; set; }
         public User? User { get; set; }
+
+        public ICollection<AdvertismentImage> AdvertismentImages { get; set; } = new List<AdvertismentImage>();
     }
 }

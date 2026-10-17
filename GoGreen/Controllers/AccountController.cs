@@ -1,16 +1,15 @@
-﻿using Berwah.BL.Service.IService;
+﻿using Berwah.BL.Service;
+using Berwah.BL.Service.IService;
 using Berwah.DAL.App;
 using Berwah.DAL.Repository.IRepository;
 using Berwah.Models.DTO;
 using Berwah.Models.Enum;
 using Berwah.Models.Models;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using ThanyaProject.Services;
 
 namespace Berwah.Controllers
@@ -25,9 +24,9 @@ namespace Berwah.Controllers
         private readonly JwtService _jwtService;
         private readonly IImageService _imageService;
         private readonly ApplicationDbContext _context;
-        private readonly IWebHostEnvironment _env;
         private readonly IUserService _userService;
         private readonly IEmailService _emailService;
+        private readonly INotificationService _notificationService;
         private readonly IImageRepository _imageRepository;
 
         public AccountController(
@@ -35,29 +34,139 @@ namespace Berwah.Controllers
             RoleManager<Role> roleManager,
             SignInManager<User> signInManager,
             JwtService jwtService,
-            IWebHostEnvironment env,
             ApplicationDbContext context,
             IUserService userService,
             IEmailService emailService,
             IImageService imageService,
-            IImageRepository imageRepository)
+            IImageRepository imageRepository,
+            INotificationService notificationService)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _signInManager = signInManager;
             _jwtService = jwtService;
-            _env = env;
             _context = context;
             _userService = userService;
             _emailService = emailService;
             _imageService = imageService;
             _imageRepository = imageRepository;
+            _notificationService = notificationService;
         }
+
+        #region Helpers
+
+        private bool IsValidEmail(string email)
+        {
+            try
+            {
+                var addr = new System.Net.Mail.MailAddress(email);
+                return addr.Address == email;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private async Task<string?> CheckEmailAndPhoneExistenceAsync(string email, string phoneNumber)
+        {
+            var emailNormalized = email.Trim().ToLower();
+            var phoneNormalized = phoneNumber.Trim();
+
+            var existingEmail = await _userManager.FindByNameAsync(emailNormalized);
+            if (existingEmail != null)
+                return "البريد الإلكتروني مستخدم بالفعل";
+
+            var existingPhone = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNormalized);
+            if (existingPhone != null)
+                return "رقم الهاتف مستخدم بالفعل";
+
+            return null;
+        }
+
+        private bool IsStrongPassword(string password)
+        {
+            if (string.IsNullOrEmpty(password) || password.Length < 9)
+                return false;
+
+            return password.Any(char.IsUpper) &&
+                   password.Any(char.IsLower) &&
+                   password.Any(char.IsDigit) &&
+                   password.Any(ch => !char.IsLetterOrDigit(ch));
+        }
+
+        private async Task<IActionResult> ProcessRegistrationAsync<T>(T model, string email, string phone, string password, string confirmPassword, UserType userType, string title)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(new { status = "error", message = "البيانات المدخلة غير صحيحة", errors = ModelState.Values.SelectMany(v => v.Errors) });
+
+            if (!IsValidEmail(email))
+                return BadRequest(new { status = "error", message = "صيغة البريد الإلكتروني غير صحيحة" });
+
+            var normalizedEmail = email.Trim().ToLower();
+            var normalizedPhone = phone.Trim();
+
+            if (password != confirmPassword)
+                return BadRequest(new { status = "error", message = "كلمة المرور وتأكيد كلمة المرور غير متطابقين" });
+
+            var existenceError = await CheckEmailAndPhoneExistenceAsync(normalizedEmail, normalizedPhone);
+            if (existenceError != null)
+                return BadRequest(new { status = "error", message = existenceError });
+
+            if (!IsStrongPassword(password))
+                return BadRequest(new { status = "error", message = "كلمة المرور يجب أن تحتوي على أحرف كبيرة وصغيرة وأرقام ورموز، وطولها 9 أحرف على الأقل" });
+
+            string key = $"Register:{normalizedEmail}";
+            var otpCode = _userService.GenerateAndSaveOtp(key, model, userType.ToString());
+
+            string htmlMessage = $@"
+            <div style='direction: rtl; font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; border-radius: 10px;'>
+                <h2 style='color: #333;'>{title}</h2>
+                <p>مرحباً بك في برواح!</p>
+                <p>رمز التحقق الخاص بك هو:</p>
+                <div style='background: white; padding: 15px; border-radius: 5px; text-align: center;'>
+                    <b style='font-size: 24px; color: #6c5ce7; letter-spacing: 5px;'>{otpCode}</b>
+                </div>
+                <p style='color: #666;'>هذا الرمز صالح لمدة <b>5 دقائق</b> فقط.</p>
+                <p style='color: #999; font-size: 12px;'>إذا لم تطلب هذا الرمز، يرجى تجاهل هذه الرسالة.</p>
+            </div>";
+
+            await _emailService.SendEmailAsync(normalizedEmail, "رمز تأكيد الحساب - برواح", htmlMessage);
+
+            return Ok(new
+            {
+                status = "pending_verification",
+                message = "تم إرسال رمز التحقق إلى بريدك الإلكتروني",
+                email = normalizedEmail,
+                expiresIn = 300
+            });
+        }
+
+        //private async Task<Berwah.Models.Models.Image?> SaveImageToCloudinaryAsync(FileDataDto? fileDto, int userId)
+        //{
+        //    if (fileDto == null || fileDto.Content == null || fileDto.Content.Length == 0)
+        //        return null;
+
+        //    // Call the new byte-array Overload
+        //    var uploadResult = await _imageService.UploadImageAsync(fileDto.Content, fileDto.FileName, fileDto.ContentType);
+
+        //    if (uploadResult == null || string.IsNullOrEmpty(uploadResult.SecureUrl?.ToString()))
+        //        return null;
+
+        //    return new Berwah.Models.Models.Image
+        //    {
+        //        Url = uploadResult.SecureUrl.ToString(),
+        //        PublicId = uploadResult.PublicId,
+        //        UserId = userId
+        //    };
+        //}
 
         private async Task<Berwah.Models.Models.Image?> SaveImageToCloudinaryAsync(IFormFile? file, int userId)
         {
-            if (file == null || file.Length == 0) return null;
+            if (file == null || file.Length == 0)
+                return null;
 
+            // استدعاء الميثود الأصلية بالـ ImageService التي تأخذ IFormFile
             var uploadResult = await _imageService.UploadImageAsync(file);
 
             if (uploadResult == null || string.IsNullOrEmpty(uploadResult.SecureUrl?.ToString()))
@@ -71,87 +180,131 @@ namespace Berwah.Controllers
             };
         }
 
-        #region Registration Step 1 - Send OTP
+        #endregion
+
+        #region Registration Step 1
 
         [HttpPost("Register/Customer")]
         public async Task<IActionResult> RegisterCustomer([FromForm] CustomerRegister model)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-
-            if (model.Password != model.ConfirmPassword)
-                return BadRequest(new { status = "error", message = "كلمة المرور وتأكيد كلمة المرور غير متطابقين" });
-
-            var existingUser = await _userManager.FindByEmailAsync(model.Email);
-            if (existingUser != null)
-                return BadRequest(new { status = "error", message = "البريد الإلكتروني مستخدم بالفعل" });
-
-            string key = $"Register:{model.Email.Trim().ToLower()}";
-            var otpCode = _userService.GenerateAndSaveOtp(key, model, UserType.User.ToString());
-
-            string htmlMessage = $@"
-            <div style='direction: rtl; font-family: Arial, sans-serif;'>
-                <h2>رمز تأكيد إنشاء الحساب</h2>
-                <p>رمز التحقق الخاص بك هو: <b style='font-size: 20px; color: #6c5ce7;'>{otpCode}</b></p>
-                <p>هذا الرمز صالِح لمدة 5 دقائق فقط.</p>
-            </div>";
-
-            await _emailService.SendEmailAsync(model.Email, "رمز تأكيد الحساب - برواح", htmlMessage);
-
-            return Ok(new { status = "pending_verification", message = "تم إرسال رمز التحقق إلى بريدك الإلكتروني", email = model.Email });
+            try
+            {
+                return await ProcessRegistrationAsync(model, model.Email, model.PhoneNumber, model.Password, model.ConfirmPassword, UserType.User, "رمز تأكيد إنشاء الحساب");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء معالجة الطلب", details = ex.Message });
+            }
         }
 
         [HttpPost("Register/Merchant")]
         public async Task<IActionResult> RegisterMerchant([FromForm] MerchantRegister model)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-
-            if (model.Password != model.ConfirmPassword)
-                return BadRequest(new { status = "error", message = "كلمة المرور وتأكيد كلمة المرور غير متطابقين" });
-
-            var existingUser = await _userManager.FindByEmailAsync(model.Email);
-            if (existingUser != null)
-                return BadRequest(new { status = "error", message = "البريد الإلكتروني مستخدم بالفعل" });
-
-            string key = $"Register:{model.Email.Trim().ToLower()}";
-            var otpCode = _userService.GenerateAndSaveOtp(key, model, UserType.Merchant.ToString());
-
-            string htmlMessage = $@"
-            <div style='direction: rtl; font-family: Arial, sans-serif;'>
-                <h2>رمز تأكيد إنشاء حساب تاجر</h2>
-                <p>رمز التحقق الخاص بك هو: <b style='font-size: 20px; color: #6c5ce7;'>{otpCode}</b></p>
-                <p>هذا الرمز صالِح لمدة 5 دقائق فقط.</p>
-            </div>";
-
-            await _emailService.SendEmailAsync(model.Email, "رمز تأكيد الحساب - برواح", htmlMessage);
-
-            return Ok(new { status = "pending_verification", message = "تم إرسال رمز التحقق إلى بريدك الإلكتروني", email = model.Email });
+            try
+            {
+                return await ProcessRegistrationAsync(model, model.Email, model.PhoneNumber, model.Password, model.ConfirmPassword, UserType.Merchant, "رمز تأكيد إنشاء حساب تاجر");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء معالجة الطلب", details = ex.Message });
+            }
         }
 
         [HttpPost("Register/Delivery")]
         public async Task<IActionResult> RegisterDelivery([FromForm] DeliveryRegister model)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(new { status = "error", message = "البيانات المدخلة غير صحيحة", errors = ModelState.Values.SelectMany(v => v.Errors) });
 
-            if (model.Password != model.ConfirmPassword)
-                return BadRequest(new { status = "error", message = "كلمة المرور وتأكيد كلمة المرور غير متطابقين" });
+                if (!IsValidEmail(model.Email))
+                    return BadRequest(new { status = "error", message = "صيغة البريد الإلكتروني غير صحيحة" });
 
-            var existingUser = await _userManager.FindByEmailAsync(model.Email);
-            if (existingUser != null)
-                return BadRequest(new { status = "error", message = "البريد الإلكتروني مستخدم بالفعل" });
+                var normalizedEmail = model.Email.Trim().ToLower();
+                var normalizedPhone = model.PhoneNumber.Trim();
 
-            string key = $"Register:{model.Email.Trim().ToLower()}";
-            var otpCode = _userService.GenerateAndSaveOtp(key, model, UserType.Delivery.ToString());
+                if (model.Password != model.ConfirmPassword)
+                    return BadRequest(new { status = "error", message = "كلمة المرور وتأكيد كلمة المرور غير متطابقين" });
 
-            string htmlMessage = $@"
-            <div style='direction: rtl; font-family: Arial, sans-serif;'>
-                <h2>رمز تأكيد إنشاء حساب مندوب توصيل</h2>
-                <p>رمز التحقق الخاص بك هو: <b style='font-size: 20px; color: #6c5ce7;'>{otpCode}</b></p>
-                <p>هذا الرمز صالِح لمدة 5 دقائق فقط.</p>
-            </div>";
+                var existenceError = await CheckEmailAndPhoneExistenceAsync(normalizedEmail, normalizedPhone);
+                if (existenceError != null)
+                    return BadRequest(new { status = "error", message = existenceError });
 
-            await _emailService.SendEmailAsync(model.Email, "رمز تأكيد الحساب - برواح", htmlMessage);
+                if (!IsStrongPassword(model.Password))
+                    return BadRequest(new { status = "error", message = "كلمة المرور يجب أن تحتوي على أحرف كبيرة وصغيرة وأرقام ورموز، وطولها 9 أحرف على الأقل" });
 
-            return Ok(new { status = "pending_verification", message = "تم إرسال رمز التحقق إلى بريدك الإلكتروني", email = model.Email });
+                // رفع الصور فوراً والحصول على الروابط أثناء أن الـ Stream صالح ومفتوح
+                if (model.PersonalImage != null && model.PersonalImage.Length > 0)
+                {
+                    var res = await _imageService.UploadImageAsync(model.PersonalImage);
+                    if (res != null && !string.IsNullOrEmpty(res.SecureUrl?.ToString()))
+                        model.PersonalImageUrl = res.SecureUrl.ToString();
+                }
+
+                if (model.NationalIdImage != null && model.NationalIdImage.Length > 0)
+                {
+                    var res = await _imageService.UploadImageAsync(model.NationalIdImage);
+                    if (res != null && !string.IsNullOrEmpty(res.SecureUrl?.ToString()))
+                        model.NationalIdImageUrl = res.SecureUrl.ToString();
+                }
+
+                if (model.DrivingLicenseImage != null && model.DrivingLicenseImage.Length > 0)
+                {
+                    var res = await _imageService.UploadImageAsync(model.DrivingLicenseImage);
+                    if (res != null && !string.IsNullOrEmpty(res.SecureUrl?.ToString()))
+                        model.DrivingLicenseImageUrl = res.SecureUrl.ToString();
+                }
+
+                if (model.CriminalRecordImage != null && model.CriminalRecordImage.Length > 0)
+                {
+                    var res = await _imageService.UploadImageAsync(model.CriminalRecordImage);
+                    if (res != null && !string.IsNullOrEmpty(res.SecureUrl?.ToString()))
+                        model.CriminalRecordImageUrl = res.SecureUrl.ToString();
+                }
+
+                if (model.VeicleImage != null && model.VeicleImage.Length > 0)
+                {
+                    var res = await _imageService.UploadImageAsync(model.VeicleImage);
+                    if (res != null && !string.IsNullOrEmpty(res.SecureUrl?.ToString()))
+                        model.VehicleImageUrl = res.SecureUrl.ToString();
+                }
+
+                // تفريغ ملفات الـ IFormFile الثقيلة من الذاكرة لتجنب مشاكل الـ Serialization والتخزين المؤقت
+                model.PersonalImage = null;
+                model.NationalIdImage = null;
+                model.DrivingLicenseImage = null;
+                model.CriminalRecordImage = null;
+                model.VeicleImage = null;
+
+                string key = $"Register:{normalizedEmail}";
+                var otpCode = _userService.GenerateAndSaveOtp(key, model, UserType.Delivery.ToString());
+
+                string htmlMessage = $@"
+        <div style='direction: rtl; font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; border-radius: 10px;'>
+            <h2 style='color: #333;'>رمز تأكيد إنشاء حساب مندوب توصيل</h2>
+            <p>مرحباً بك في برواح!</p>
+            <p>رمز التحقق الخاص بك هو:</p>
+            <div style='background: white; padding: 15px; border-radius: 5px; text-align: center;'>
+                <b style='font-size: 24px; color: #6c5ce7; letter-spacing: 5px;'>{otpCode}</b>
+            </div>
+            <p style='color: #666;'>هذا الرمز صالح لمدة <b>5 دقائق</b> فقط.</p>
+        </div>";
+
+                await _emailService.SendEmailAsync(normalizedEmail, "رمز تأكيد الحساب - برواح", htmlMessage);
+
+                return Ok(new
+                {
+                    status = "pending_verification",
+                    message = "تم إرسال رمز التحقق إلى بريدك الإلكتروني",
+                    email = normalizedEmail,
+                    expiresIn = 300
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء معالجة الطلب", details = ex.Message });
+            }
         }
 
         #endregion
@@ -161,128 +314,177 @@ namespace Berwah.Controllers
         [HttpPost("VerifyRegisterOtp")]
         public async Task<IActionResult> VerifyRegisterOtp([FromBody] VerifyOTP model)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-
-            // تأكد من مطابقة نفس الـ Key المستخدم أثناء حفظ الـ OTP في الخطوة الأولى
-            string key = $"Register:{model.TargetEmail.Trim().ToLower()}";
-
-            var isValid = _userService.VerifyOtp(key, model.Otp, out var registerModel, out var userTypeStr);
-
-            Console.WriteLine($"Incoming Email: {model.TargetEmail}");
-            Console.WriteLine($"Incoming OTP: {model.Otp}");
-            Console.WriteLine($"Is OTP Valid: {isValid}");
-
-            if (!isValid || registerModel == null || string.IsNullOrEmpty(userTypeStr))
-                return BadRequest(new { status = "error", message = "رمز التحقق غير صحيح أو انتهت صلاحيته" });
-
-            User user;
-            string userPassword;
-
-            // 1. معالجة حساب Customer
-            if (userTypeStr == UserType.User.ToString() && registerModel is CustomerRegister customerDto)
+            try
             {
-                user = new User
+                if (!ModelState.IsValid)
+                    return BadRequest(new { status = "error", message = "البيانات المدخلة غير صحيحة" });
+
+                var normalizedEmail = model.TargetEmail.Trim().ToLower();
+                string key = $"Register:{normalizedEmail}";
+
+                var isValid = _userService.VerifyOtp(key, model.Otp, out var registerModel, out var userTypeStr);
+
+                if (!isValid || registerModel == null || string.IsNullOrEmpty(userTypeStr))
+                    return BadRequest(new { status = "error", message = "رمز التحقق غير صحيح أو انتهت صلاحيته" });
+
+                User user = new User
                 {
-                    UserName = customerDto.Email.Trim(),
-                    Email = customerDto.Email.Trim(),
-                    FirstName = customerDto.FirstName,
-                    SecondName = customerDto.SecondName,
-                    ThirdName = customerDto.ThirdName,
-                    LastName = customerDto.LastName,
-                    PhoneNumber = customerDto.PhoneNumber,
-                    Address = customerDto.Goverment,
-                    UserType = UserType.User,
-                    EmailConfirmed = true
+                    UserName = normalizedEmail,
+                    Email = normalizedEmail,
+                    EmailConfirmed = true,
+                    CreatedAt = DateTime.UtcNow,
                 };
-                userPassword = customerDto.Password;
-            }
-            // 2. معالجة حساب Merchant
-            else if (userTypeStr == UserType.Merchant.ToString() && registerModel is MerchantRegister merchantDto)
-            {
-                user = new User
+                string userPassword = string.Empty;
+
+                //لليوزر
+                if (userTypeStr == UserType.User.ToString() && registerModel is CustomerRegister customerDto)
                 {
-                    UserName = merchantDto.Email.Trim(),
-                    Email = merchantDto.Email.Trim(),
-                    FirstName = merchantDto.FirstName,
-                    SecondName = merchantDto.SecondName,
-                    ThirdName = merchantDto.ThirdName,
-                    LastName = merchantDto.LastName,
-                    PhoneNumber = merchantDto.PhoneNumber,
-                    Address = merchantDto.AddressDetails,
-                    UserType = UserType.Merchant,
-                    EmailConfirmed = true
-                };
-                userPassword = merchantDto.Password;
-            }
-            // 3. معالجة حساب Delivery
-            else if (userTypeStr == UserType.Delivery.ToString() && registerModel is DeliveryRegister deliveryDto)
-            {
-                user = new User
+                    user.FirstName = customerDto.FirstName.Trim();
+                    user.SecondName = customerDto.SecondName.Trim();
+                    user.ThirdName = customerDto.ThirdName.Trim();
+                    user.LastName = customerDto.LastName.Trim();
+                    user.PhoneNumber = customerDto.PhoneNumber.Trim();
+                    user.Address = customerDto.Goverment.Trim();
+                    user.UserType = UserType.User;
+                    userPassword = customerDto.Password;
+                }
+                // المتجر او البقاله
+                else if (userTypeStr == UserType.Merchant.ToString() && registerModel is MerchantRegister merchantDto)
                 {
-                    UserName = deliveryDto.Email.Trim(),
-                    Email = deliveryDto.Email.Trim(),
-                    FirstName = deliveryDto.FirstName,
-                    SecondName = deliveryDto.SecondName,
-                    ThirdName = deliveryDto.ThirdName,
-                    LastName = deliveryDto.LastName,
-                    PhoneNumber = deliveryDto.PhoneNumber,
-                    Address = deliveryDto.GovermentOrArea,
-                    UserType = UserType.Delivery,
-                    EmailConfirmed = true
-                };
-                userPassword = deliveryDto.Password;
-            }
-            else
-            {
-                return BadRequest(new { status = "error", message = "نوع البيانات غير مطابق" });
-            }
+                    user.FirstName = merchantDto.FirstName.Trim();
+                    user.SecondName = merchantDto.SecondName.Trim();
+                    user.ThirdName = merchantDto.ThirdName.Trim();
+                    user.LastName = merchantDto.LastName.Trim();
+                    user.PhoneNumber = merchantDto.PhoneNumber.Trim();
+                    user.Address = merchantDto.Address.Trim();
 
-            // إنشاء الحساب لكل الأنواع في مكان واحد موحد
-            var result = await _userManager.CreateAsync(user, userPassword);
-            if (!result.Succeeded) return BadRequest(new { status = "error", errors = result.Errors });
+                    user.BusinessName = merchantDto.BusinessName?.Trim();
+                    user.BusinessType = merchantDto.BusinessType?.Trim();
+                    user.BusinessDescription = merchantDto.BusinessDescription?.Trim();
+                    user.DeliveryTimeSpan = merchantDto.DeliveryTimeSpan?.Trim();
+                    user.MinimumOrder = merchantDto.MinimumOrder;
+                    user.WorkHours = merchantDto.WorkHours?.Trim();
+                    user.AcceptOrdersAutomatically = merchantDto.AcceptOrdersAutomatically;
 
-            if (!await _roleManager.RoleExistsAsync(userTypeStr))
-                await _roleManager.CreateAsync(new Role { Name = userTypeStr });
-
-            await _userManager.AddToRoleAsync(user, userTypeStr);
-
-            // رفع صور الـ Delivery فقط في حال كان الموديل الخاص به
-            if (registerModel is DeliveryRegister delDto)
-            {
-                var imagesToUpload = new List<IFormFile?>
-        {
-            delDto.PersonalImage,
-            delDto.NationalIdImage,
-            delDto.DrivingLicenseImage,
-            delDto.CriminalRecordImage
-        };
-
-                foreach (var file in imagesToUpload)
+                    user.UserType = UserType.Merchant;
+                    userPassword = merchantDto.Password;
+                }
+                //للدليفري
+                else if (userTypeStr == UserType.Delivery.ToString() && registerModel is DeliveryRegister deliveryDto)
                 {
-                    if (file != null)
+                    user.FirstName = deliveryDto.FirstName.Trim();
+                    user.SecondName = deliveryDto.SecondName.Trim();
+                    user.ThirdName = deliveryDto.ThirdName.Trim();
+                    user.LastName = deliveryDto.LastName.Trim();
+                    user.PhoneNumber = deliveryDto.PhoneNumber.Trim();
+                    user.Address = deliveryDto.Address.Trim();
+                    user.VehicleType = deliveryDto.VehicleType.Trim();
+                    user.PreviousExperience = deliveryDto.PreviousExperience?.Trim();
+                    user.UserType = UserType.Delivery;
+                    userPassword = deliveryDto.Password;
+
+                    user.ProfileImageUrl = deliveryDto.PersonalImageUrl;
+                    user.NationalIdImageUrl = deliveryDto.NationalIdImageUrl;
+                    user.DrivingLicenseImageUrl = deliveryDto.DrivingLicenseImageUrl;
+                    user.CriminalRecordImageUrl = deliveryDto.CriminalRecordImageUrl;
+                    user.VehicleImageUrl = deliveryDto.VehicleImageUrl;
+                }
+                else
+                {
+                    return BadRequest(new { status = "error", message = "نوع البيانات غير مطابق" });
+                }
+
+                var result = await _userManager.CreateAsync(user, userPassword);
+                if (!result.Succeeded)
+                    return BadRequest(new { status = "error", message = "فشل إنشاء الحساب", errors = result.Errors.Select(e => e.Description) });
+
+                if (!await _roleManager.RoleExistsAsync(userTypeStr))
+                    await _roleManager.CreateAsync(new Role { Name = userTypeStr });
+
+                await _userManager.AddToRoleAsync(user, userTypeStr);
+
+
+                if (registerModel is DeliveryRegister delDto)
+                {
+
+                    if (delDto.PersonalImage != null)
                     {
-                        var imageEntity = await SaveImageToCloudinaryAsync(file, user.Id);
-                        if (imageEntity != null)
+                        var personalImgEntity = await SaveImageToCloudinaryAsync(delDto.PersonalImage, user.Id);
+                        if (personalImgEntity != null)
                         {
-                            await _imageRepository.AddAsync(imageEntity);
+                            user.ProfileImageUrl = personalImgEntity.Url;
+                            await _imageRepository.AddAsync(personalImgEntity);
                         }
                     }
+
+
+                    if (delDto.NationalIdImage != null)
+                    {
+                        var natImgEntity = await SaveImageToCloudinaryAsync(delDto.NationalIdImage, user.Id);
+                        if (natImgEntity != null)
+                        {
+                            user.NationalIdImageUrl = natImgEntity.Url;
+                            await _imageRepository.AddAsync(natImgEntity);
+                        }
+                    }
+
+
+                    if (delDto.DrivingLicenseImage != null)
+                    {
+                        var licImgEntity = await SaveImageToCloudinaryAsync(delDto.DrivingLicenseImage, user.Id);
+                        if (licImgEntity != null)
+                        {
+                            user.DrivingLicenseImageUrl = licImgEntity.Url;
+                            await _imageRepository.AddAsync(licImgEntity);
+                        }
+                    }
+
+
+                    if (delDto.CriminalRecordImage != null)
+                    {
+                        var crimImgEntity = await SaveImageToCloudinaryAsync(delDto.CriminalRecordImage, user.Id);
+                        if (crimImgEntity != null)
+                        {
+                            user.CriminalRecordImageUrl = crimImgEntity.Url;
+                            await _imageRepository.AddAsync(crimImgEntity);
+                        }
+                    }
+
+                    if (delDto.VeicleImage != null)
+                    {
+                        var vehImgEntity = await SaveImageToCloudinaryAsync(delDto.VeicleImage, user.Id);
+                        if (vehImgEntity != null)
+                        {
+                            user.VehicleImageUrl = vehImgEntity.Url;
+                            await _imageRepository.AddAsync(vehImgEntity);
+                        }
+                    }
+
+
+                    await _userManager.UpdateAsync(user);
+                    await _context.SaveChangesAsync();
                 }
-            }
 
-            var token = _jwtService.CreateToken(user, new[] { userTypeStr });
+                var token = _jwtService.CreateToken(user, new[] { userTypeStr });
 
-            return Ok(new
-            {
-                status = "success",
-                token = token,
-                data = new
+                return Ok(new
                 {
-                    email = user.Email,
-                    role = userTypeStr,
-                    userId = user.Id
-                }
-            });
+                    status = "success",
+                    message = "تم إنشاء الحساب بنجاح",
+                    token = token,
+                    data = new
+                    {
+                        userId = user.Id,
+                        email = user.Email,
+                        name = $"{user.FirstName} {user.LastName}".Trim(),
+                        role = userTypeStr
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء التحقق", details = ex.Message });
+            }
         }
 
         #endregion
@@ -292,47 +494,61 @@ namespace Berwah.Controllers
         [HttpPost("Login")]
         public async Task<IActionResult> Login([FromBody] Login model)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-            var user = await _userManager.FindByNameAsync(model.Email);
-            if (user == null)
-                return Unauthorized("Invalid Email or Password");
-
-            var result = await _signInManager.CheckPasswordSignInAsync(
-                user,
-                model.Password,
-                false);
-
-            if (!result.Succeeded)
-                return Unauthorized("Invalid Email or Password");
-
-            var roles = await _userManager.GetRolesAsync(user);
-            var token = _jwtService.CreateToken(user, roles);
-
-            return Ok(new
+            try
             {
-                status = "success",
-                token = token,
-                data = new
+                if (!ModelState.IsValid)
+                    return BadRequest(new { status = "error", message = "البيانات المدخلة غير صحيحة", errors = ModelState.Values.SelectMany(v => v.Errors) });
+
+                var input = model.Email.Trim();
+
+                var user = IsValidEmail(input)
+                    ? await _userManager.FindByNameAsync(input.ToLower())
+                    : await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == input);
+
+                if (user == null)
+                    return Unauthorized(new { status = "error", message = "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
+
+                var result = await _signInManager.CheckPasswordSignInAsync(user, model.Password, false);
+
+                if (!result.Succeeded)
+                    return Unauthorized(new { status = "error", message = "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
+
+                var roles = await _userManager.GetRolesAsync(user);
+                var token = _jwtService.CreateToken(user, roles);
+
+                return Ok(new
                 {
-                    user = new
+                    status = "success",
+                    message = "تم تسجيل الدخول بنجاح",
+                    token = token,
+                    data = new
                     {
-                        id = user.Id,
-                        name = $"{user.FirstName} {user.LastName}".Trim(),
+                        userId = user.Id,
                         email = user.Email,
+                        name = $"{user.FirstName} {user.LastName}".Trim(),
                         role = roles.FirstOrDefault(),
-                        last_login = DateTime.UtcNow
+                        lastLogin = DateTime.UtcNow
                     }
-                }
-            });
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء تسجيل الدخول", details = ex.Message });
+            }
         }
 
         [HttpPost("Logout")]
         public async Task<IActionResult> Logout()
         {
-            await _signInManager.SignOutAsync();
-            return Ok(new { status = "success", message = "Logout successful!" });
+            try
+            {
+                await _signInManager.SignOutAsync();
+                return Ok(new { status = "success", message = "تم تسجيل الخروج بنجاح" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء تسجيل الخروج", details = ex.Message });
+            }
         }
 
         #endregion
@@ -342,60 +558,455 @@ namespace Berwah.Controllers
         [HttpPost("ForgotPassword")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgetPas model)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-
-            var user = await _userManager.FindByNameAsync(model.TargetEmail)
-                        ?? _userManager.Users.FirstOrDefault(u => u.PhoneNumber == model.TargetEmail);
-
-            if (user == null) return NotFound("المستخدم غير موجود");
-
-            string key = $"ResetPassword:{user.Email.Trim().ToLower()}";
-            var otp = _userService.GenerateAndSaveOtp(key, null, null); 
-
-            if (model.SendVie.Equals("Email", StringComparison.OrdinalIgnoreCase))
+            try
             {
-                string htmlMessage = $@"
-            <div style='direction: rtl; font-family: Arial, sans-serif;'>
-                <h2>رمز إعادة تعيين كلمة المرور</h2>
-                <p>رمز التحقق الخاص بك هو: <b style='font-size: 20px; color: #6c5ce7;'>{otp}</b></p>
-                <p>هذا الرمز صالِح لمدة 5 دقائق فقط.</p>
-            </div>";
+                if (!ModelState.IsValid)
+                    return BadRequest(new { status = "error", message = "البيانات المدخلة غير صحيحة" });
 
-                await _emailService.SendEmailAsync(user.Email, "رمز إعادة تعيين كلمة المرور - برواح", htmlMessage);
+                var input = model.TargetEmail.Trim();
+
+                var user = IsValidEmail(input)
+                    ? await _userManager.FindByNameAsync(input.ToLower())
+                    : await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == input);
+
+                if (user == null)
+                    return NotFound(new { status = "error", message = "المستخدم غير موجود" });
+
+                string key = $"ResetPassword:{user.Email!.Trim().ToLower()}";
+                var otp = _userService.GenerateAndSaveOtp(key, null, null);
+
+                if (model.SendVie.Equals("Email", StringComparison.OrdinalIgnoreCase))
+                {
+                    string htmlMessage = $@"
+                    <div style='direction: rtl; font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; border-radius: 10px;'>
+                        <h2 style='color: #333;'>رمز إعادة تعيين كلمة المرور</h2>
+                        <p>رمز التحقق الخاص بك هو:</p>
+                        <div style='background: white; padding: 15px; border-radius: 5px; text-align: center;'>
+                            <b style='font-size: 24px; color: #6c5ce7; letter-spacing: 5px;'>{otp}</b>
+                        </div>
+                        <p style='color: #666;'>هذا الرمز صالح لمدة <b>5 دقائق</b> فقط.</p>
+                        <p style='color: #999; font-size: 12px;'>إذا لم تطلب هذا الرمز، يرجى تجاهل هذه الرسالة.</p>
+                    </div>";
+
+                    await _emailService.SendEmailAsync(user.Email, "رمز إعادة تعيين كلمة المرور - برواح", htmlMessage);
+                }
+
+                return Ok(new { status = "success", message = "تم إرسال رمز التحقق بنجاح", email = user.Email });
             }
-
-            return Ok(new { status = "success", message = "تم إرسال رمز التحقق بنجاح" });
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء معالجة الطلب", details = ex.Message });
+            }
         }
 
         [HttpPost("VerifyOtp")]
-        public IActionResult VerifyOtp([FromBody] VerifyOTP model)
+        public async Task<IActionResult> VerifyOtp([FromBody] VerifyOTP model)
         {
-            string key = $"ResetPassword:{model.TargetEmail.Trim().ToLower()}";
-            var isValid = _userService.VerifyOtp(key, model.Otp, out _, out _);
+            try
+            {
+                var normalizedEmail = model.TargetEmail.Trim().ToLower();
+                string key = $"ResetPassword:{normalizedEmail}";
+                var isValid = _userService.VerifyOtp(key, model.Otp, out _, out _);
 
-            if (!isValid)
-                return BadRequest(new { status = "error", message = "رمز التحقق غير صحيح أو انتهت صلاحيته" });
+                if (!isValid)
+                    return BadRequest(new { status = "error", message = "رمز التحقق غير صحيح أو انتهت صلاحيته" });
 
-            return Ok(new { status = "success", message = "تم التحقق بنجاح" });
+                var user = await _userManager.FindByNameAsync(normalizedEmail);
+                if (user == null)
+                    return NotFound(new { status = "error", message = "المستخدم غير موجود" });
+
+                // إنشاء Reset Token مؤقت لإكماله في خطوة ResetPassword للأمان
+                var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+
+                return Ok(new { status = "success", message = "تم التحقق بنجاح", resetToken = resetToken });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء التحقق", details = ex.Message });
+            }
         }
 
         [HttpPost("ResetPassword")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPass model)
         {
-            var user = await _userManager.FindByNameAsync(model.TargetEmail)
-                        ?? _userManager.Users.FirstOrDefault(u => u.PhoneNumber == model.TargetEmail);
+            try
+            {
+                var normalizedEmail = model.TargetEmail.Trim().ToLower();
 
-            if (user == null) return NotFound("المستخدم غير موجود");
+                var user = await _userManager.FindByNameAsync(normalizedEmail)
+                           ?? await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == model.TargetEmail.Trim());
 
-            var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
-            var result = await _userManager.ResetPasswordAsync(user, resetToken, model.NewPassword);
+                if (user == null)
+                    return NotFound(new { status = "error", message = "المستخدم غير موجود" });
 
+                var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+                var result = await _userManager.ResetPasswordAsync(user, resetToken, model.NewPassword);
+
+                if (!result.Succeeded)
+                    return BadRequest(new { status = "error", message = "فشل تغيير كلمة المرور", errors = result.Errors.Select(e => e.Description) });
+
+                return Ok(new { status = "success", message = "تم تغيير كلمة المرور بنجاح" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء تغيير كلمة المرور", details = ex.Message });
+            }
+        }
+
+        #endregion
+
+        #region Profile & Dashboard Endpoints
+
+        [Authorize]
+        [HttpGet("UserProfile")]
+        public async Task<IActionResult> GetDashboard()
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                    return Unauthorized();
+
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null)
+                    return NotFound(new { status = "error", message = "المستخدم غير موجود" });
+
+                
+                var activeAdsCount = await _context.Advertisements
+                    .CountAsync(a => a.UserId == user.Id && a.IsActive);
+
+                
+                var latestAds = await _context.Advertisements
+                    .Where(a => a.UserId == user.Id)
+                    .OrderByDescending(a => a.CreatedAt)
+                    .Take(5)
+                    .Select(a => new AdSummaryDto
+                    {
+                        AdId = a.Id,
+                        Title = a.Title,
+                        Price = a.Price,
+                        ImageUrl = a.AdvertismentImages
+                            .Select(img => img.Image.Url)
+                            .FirstOrDefault(), 
+                        PostedDate = a.CreatedAt
+                    }).ToListAsync();
+
+                var userImage = await _context.Images.FirstOrDefaultAsync(i => i.UserId == user.Id);
+
+                
+                var arabicCulture = new System.Globalization.CultureInfo("ar-EG");
+                var joinedDateFormatted = user.CreatedAt.ToString("MMMM yyyy", arabicCulture);
+
+                var dashboardDto = new UserDashboardDto
+                {
+                    UserId = user.Id.ToString(),
+                    FullName = $"{user.FirstName} {user.SecondName} {user.ThirdName} {user.LastName}".Trim(),
+                    ProfileImageUrl = userImage?.Url,
+                    Address = user.Address,
+                    JoinedDateText = $"عضو منذ {joinedDateFormatted}",
+                    ActiveAdsCount = activeAdsCount,
+                    ViewsToday = 0, 
+                    Rating = user.Rating,
+                    LatestAds = latestAds
+                };
+
+                return Ok(new { status = "success", data = dashboardDto });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpPut("UpdateProfile")]
+        public async Task<IActionResult> UpdateProfile([FromForm] UpdateProfileDto model)
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var user = await _userManager.FindByIdAsync(userId!);
+                if (user == null) return NotFound();
+
+                if (!string.IsNullOrEmpty(model.FirstName)) user.FirstName = model.FirstName.Trim();
+                if (!string.IsNullOrEmpty(model.SecondName)) user.SecondName = model.SecondName.Trim();
+                if (!string.IsNullOrEmpty(model.ThirdName)) user.ThirdName = model.ThirdName.Trim();
+                if (!string.IsNullOrEmpty(model.LastName)) user.LastName = model.LastName.Trim();
+                if (!string.IsNullOrEmpty(model.Address)) user.Address = model.Address.Trim();
+
+                // رفع الصورة باستخدام الـ Overload الجديدة الخاصة بـ IFormFile
+                if (model.ProfileImage != null)
+                {
+                    var imageEntity = await SaveImageToCloudinaryAsync(model.ProfileImage, user.Id);
+                    if (imageEntity != null)
+                    {
+                        var oldImage = await _context.Images.FirstOrDefaultAsync(i => i.UserId == user.Id);
+                        if (oldImage != null)
+                            _context.Images.Remove(oldImage);
+
+                        await _imageRepository.AddAsync(imageEntity);
+                    }
+                }
+
+                await _userManager.UpdateAsync(user);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { status = "success", message = "تم تحديث البيانات بنجاح" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+        #endregion
+
+        #region Settings & Preferences Endpoints
+
+        [Authorize]
+        [HttpGet("Settings")]
+        public async Task<IActionResult> GetSettings()
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var user = await _userManager.FindByIdAsync(userId!);
+                if (user == null) return NotFound();
+
+                var userImage = await _context.Images.FirstOrDefaultAsync(i => i.UserId == user.Id);
+
+                var settingsDto = new UserSettingDto
+                {
+                    FullName = $"{user.FirstName} {user.SecondName} {user.ThirdName} {user.LastName}".Trim(),
+                    ProfileImageUrl = userImage?.Url,
+                    Address = string.IsNullOrEmpty(user.Address) ? "لم تتم إضافة العنوان بعد" : user.Address,
+                    Language = user.language ?? "العربية",
+                    HidePhoneNumber = user.HidePhoneNumber,
+                    EnableNotifications = user.PushNotificationEnable,
+                    LastPasswordChangeText = user.LastPasswordChangeDate.HasValue
+                        ? $"آخر تحديث {GetTimeAgo(user.LastPasswordChangeDate.Value)}"
+                        : "لم يتم التغيير مؤخراً"
+                };
+
+                return Ok(new { status = "success", data = settingsDto });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpPost("ChangePassword")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto model)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            if (model.NewPassword != model.ConfirmPassword)
+                return BadRequest(new { status = "error", message = "كلمات المرور غير متطابقة" });
+
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId!);
+            if (user == null) return NotFound();
+
+            var result = await _userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
             if (!result.Succeeded)
-                return BadRequest(result.Errors);
+                return BadRequest(new { status = "error", message = "كلمة المرور الحالية غير صحيحة أو الجديدة لا تستوفي الشروط", errors = result.Errors.Select(e => e.Description) });
+
+            user.LastPasswordChangeDate = DateTime.UtcNow;
+            await _userManager.UpdateAsync(user);
 
             return Ok(new { status = "success", message = "تم تغيير كلمة المرور بنجاح" });
         }
 
+        [Authorize]
+        [HttpPatch("UpdatePreferences")]
+        public async Task<IActionResult> UpdatePreferences([FromBody] UpdatePreferencesDto model)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId!);
+            if (user == null) return NotFound();
+
+            if (model.HidePhoneNumber.HasValue) user.HidePhoneNumber = model.HidePhoneNumber.Value;
+            if (model.PushNotificationsEnabled.HasValue) user.PushNotificationEnable = model.PushNotificationsEnabled.Value;
+            if (!string.IsNullOrEmpty(model.Language)) user.language = model.Language;
+
+            await _userManager.UpdateAsync(user);
+
+            return Ok(new { status = "success", message = "تم تحديث التفضيلات بنجاح" });
+        }
+
+        [Authorize]
+        [HttpPost("FreezeAccount")]
+        public async Task<IActionResult> FreezeAccount()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId!);
+            if (user == null) return NotFound();
+
+            user.IsFrozen = true;
+            await _userManager.UpdateAsync(user);
+
+            return Ok(new { status = "success", message = "تم تجميد الحساب بنجاح" });
+        }
+
+        [Authorize]
+        [HttpDelete("DeleteAccount")]
+        public async Task<IActionResult> DeleteAccount()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId!);
+            if (user == null) return NotFound();
+
+            // يمكنك تنفيذ Soft Delete أو DeleteAsync
+            var result = await _userManager.DeleteAsync(user);
+            if (!result.Succeeded)
+                return BadRequest(new { status = "error", message = "فشل حذف الحساب" });
+
+            return Ok(new { status = "success", message = "تم حذف الحساب نهائياً" });
+        }
+
         #endregion
+        #region Transactions & Orders Endpoints
+        [Authorize]
+        [HttpGet("MyTransactions")]
+        public async Task<IActionResult> GetMyTransactions()
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+                var orders = await _context.Orders
+                    .Where(o => o.UserId == userId)
+                    .OrderByDescending(o => o.CreatedAt)
+                    .ToListAsync();
+
+                var result = orders.Select(o => new UserTransactionDto
+                {
+                    OrderId = o.Id,
+                    Title = $"طلب منتجات أو خدمات #{o.Id}",
+                    Status = o.ConditionStaus ?? "قيد المعالجة",
+                    TotalPrice = (decimal)o.TotalPrice,
+                    TransactionDate = o.CreatedAt.ToString("yyyy-MM-dd hh:mm tt")
+                }).ToList();
+
+                return Ok(new { status = "success", data = result });
+            }
+            catch(Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpPost("UpdateTransactionStatus/{orderId}")]
+        public async Task<IActionResult> UpdateTransactionStatus(int orderId, [FromBody] UpdateTransactionStatusDto model)
+        {
+            try
+            {
+                var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+
+                if (order == null)
+                    return NotFound(new { status = "error", message = "الطلب أو المعاملة غير موجودة" });
+
+                order.ConditionStaus = model.NewStatus;
+                await _context.SaveChangesAsync();
+
+                await _notificationService.SendNotificationAsync(new SendNotification
+                {
+                    UserId = model.TargetUserId,
+                    Title = "تحديث معاملة 📦",
+                    Message = $"تم تغيير حالة المعاملة الخاصة بك إلى: {model.NewStatus}"
+                });
+
+                return Ok(new { status = "success", message = "تم تحديث حالة المعاملة وإرسال الإشعار للطرف الآخر بنجاح" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        #endregion
+
+        #region Payment Methods & Billing Endpoints
+        [Authorize]
+        [HttpGet("PaymentMethods")]
+        public async Task<IActionResult> GetPaymentMethods()
+        {
+            try
+            {
+                // جلب معرف المستخدم الحالي من التوكن
+                var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+                // جلب البطاقات الحقيقية الخاصة بالمستخدم من جدول VisaCard
+                var cards = await _context.VisaCards
+                    .Where(v => v.UserId == userId)
+                    .Select(v => new PaymentMethodDto
+                    {
+                        Id = v.Id,
+                        CardName = v.CardName,
+                        CardNumber ="•••• " + v.CardNumber.Substring(v.CardNumber.Length - 4),
+                        Expiration = v.Expiration,
+                        IsDefault = v.IsDefault
+                    })
+                    .ToListAsync();
+
+                return Ok(new { status = "success", data = cards });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpPost("AddPaymentCard")]
+        public async Task<IActionResult> AddPaymentCard([FromBody] AddVisaCardDto model)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+                if (!ModelState.IsValid)
+                    return BadRequest(new { status = "error", message = "البيانات المدخلة غير صحيحة" });
+
+
+                if (model.IsDefault)
+                {
+                    var existingCards = await _context.VisaCards.Where(v => v.UserId == userId).ToListAsync();
+                    foreach (var card in existingCards)
+                    {
+                        card.IsDefault = false;
+                    }
+                }
+                var newVisa = new VisaCard
+                {
+                    CardName = model.CardName.Trim(),
+                    CardNumber = model.CardNumber.Trim(),
+                    Expiration = model.Expiration.Trim(),
+                    IsDefault = model.IsDefault,
+                    UserId = userId
+                };
+
+                _context.VisaCards.Add(newVisa);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { status = "success", message = "تم حفظ وتأكيد وسيلة الدفع بنجاح", cardId = newVisa.Id });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء حفظ البطاقة", details = ex.Message });
+            }
+        }
+        #endregion
+
+        private string GetTimeAgo(DateTime date)
+        {
+            var span = DateTime.UtcNow - date;
+            if (span.Days > 30) return $"قبل {span.Days / 30} أشهر";
+            if (span.Days > 0) return $"قبل {span.Days} أيام";
+            return "اليوم";
+        }
     }
 }
+   

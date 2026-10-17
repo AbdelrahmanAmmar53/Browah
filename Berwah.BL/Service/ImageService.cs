@@ -28,19 +28,35 @@ namespace Berwah.BL.Service
             _cloudinary = new Cloudinary(acc);
         }
 
+        // Standard IFormFile Upload
         public async Task<ImageUploadResult> UploadImageAsync(IFormFile file)
         {
             if (file == null || file.Length == 0)
                 return new ImageUploadResult();
 
             using var stream = file.OpenReadStream();
+            return await UploadFromStreamAsync(stream, file.FileName, file.ContentType);
+        }
 
+        // Overload for FileDataDto / Byte Array (Used in OTP Registration flow)
+        public async Task<ImageUploadResult> UploadImageAsync(byte[] fileBytes, string fileName, string contentType)
+        {
+            if (fileBytes == null || fileBytes.Length == 0)
+                return new ImageUploadResult();
+
+            using var stream = new MemoryStream(fileBytes);
+            return await UploadFromStreamAsync(stream, fileName, contentType);
+        }
+
+        // Private helper to remove duplicate Cloudinary code
+        private async Task<ImageUploadResult> UploadFromStreamAsync(Stream stream, string fileName, string contentType)
+        {
             // PDF
-            if (file.ContentType == "application/pdf")
+            if (contentType == "application/pdf")
             {
                 var pdfParams = new RawUploadParams
                 {
-                    File = new FileDescription(file.FileName, stream),
+                    File = new FileDescription(fileName, stream),
                     Folder = "da-net7"
                 };
 
@@ -56,7 +72,7 @@ namespace Berwah.BL.Service
             // Images
             var imageParams = new ImageUploadParams
             {
-                File = new FileDescription(file.FileName, stream),
+                File = new FileDescription(fileName, stream),
                 Transformation = new Transformation(),
                 Folder = "da-net7"
             };

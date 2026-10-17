@@ -11,6 +11,7 @@ namespace Berwah.DAL.Repository.IRepository
     {
         Task<IEnumerable<Category>> GetMainCategoriesAsync();
         Task<IEnumerable<Product>> GetLatestProductsAsync(int count);
-        Task<IEnumerable<Product>> GetRecentlyViewedProductsAsync(int count);
+        Task<IEnumerable<Product>> GetRecentlyViewedProductsAsync(string userId,int count);
+        Task<IEnumerable<Advertisment>> GetTopAdvertisementsAsync(int count);
     }
 }

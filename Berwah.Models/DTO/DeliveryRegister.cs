@@ -10,7 +10,7 @@ namespace Berwah.Models.DTO
 {
     public class DeliveryRegister: Registration
     {
-        public string GovermentOrArea { get; set; } = string.Empty;
+       // public string GovermentOrArea { get; set; } = string.Empty;
 
         public string? PreviousExperience { get; set; }
 
@@ -20,5 +20,12 @@ namespace Berwah.Models.DTO
         public IFormFile? DrivingLicenseImage { get; set; }
         public IFormFile? CriminalRecordImage { get; set; }
         public IFormFile? PersonalImage { get; set; }
+        public IFormFile? VeicleImage { get; set; }
+
+        public string? PersonalImageUrl { get; set; }
+        public string? NationalIdImageUrl { get; set; }
+        public string? DrivingLicenseImageUrl { get; set; }
+        public string? CriminalRecordImageUrl { get; set; }
+        public string? VehicleImageUrl { get; set; }
     }
 }

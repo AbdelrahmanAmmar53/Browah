@@ -23,24 +23,30 @@ namespace Berwah.Controllers
         public async Task<IActionResult> GetMainCategories()
         {
             var categories = await _context.Categories
-                .Select(c => new { c.Id, c.Name, c.IconUrl })
+                .Select(c => new
+                {
+                    c.Id,
+                    c.Name,
+                    //ImageUrl = c.IconUrl,
+                    CategoryType = c.CategoryType.ToString() 
+                })
                 .ToListAsync();
 
             return Ok(new { status = "success", data = categories });
         }
+
         [Authorize(Roles = "Admin")]
         [HttpPost("Createcategory")]
         public async Task<IActionResult> CreateCategory([FromForm] CreateOrUpdateCategory dto)
         {
-
             if (await _context.Categories.AnyAsync(c => c.Name == dto.Name))
                 return BadRequest(new { status = "fail", message = "هذا القسم موجود بالفعل" });
 
             var category = new Category
             {
                 Name = dto.Name,
-
-                IconUrl = dto.IconFile != null ? "مسار_الصورة_المرفوعة" : null
+                CategoryType = dto.CategoryType, 
+                //IconUrl = dto.IconFile != null ? "مسار_الصورة_المرفوعة" : null
             };
 
             await _context.Categories.AddAsync(category);
@@ -58,10 +64,9 @@ namespace Berwah.Controllers
                 return NotFound(new { status = "fail", message = "القسم غير موجود" });
 
             category.Name = dto.Name;
-            if (dto.IconFile != null)
-            {
-                category.IconUrl = "مسار_الصورة_الجديدة";
-            }
+            category.CategoryType = dto.CategoryType; 
+
+          
 
             _context.Categories.Update(category);
             await _context.SaveChangesAsync();

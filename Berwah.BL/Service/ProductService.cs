@@ -1,5 +1,6 @@
 ﻿using Berwah.BL.Service.IService;
 using Berwah.DAL.App;
+using Berwah.DAL.Repository;
 using Berwah.DAL.Repository.IRepository;
 using Berwah.Models.DTO;
 using Berwah.Models.Enum;
@@ -8,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Dynamic.Core;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -52,12 +54,10 @@ namespace Berwah.BL.Service
 
             if (user.UserType == UserType.Merchant)
             {
-                // التاجر منتجاته دائماً NotApplicable أو New تلقائياً
                 finalCondition = ProductCondition.NotApplicable;
             }
             else
             {
-                // المستخدم العادي: إذا أرسل Condition نأخذها، وإلا الافتراضي New
                 finalCondition = dto.Condition;
             }
 
@@ -114,6 +114,22 @@ namespace Berwah.BL.Service
             await _productRepo.SaveChangesAsync();
         }
 
+        public async Task<Berwah.Models.DTO.PagedResult<ProductCardDto>> SearchProductsAsync(SearchProductDto searchDto)
+        {
+            var (products, totalCount) = await _productRepo.SearchProductsAsync(searchDto);
+
+            var productDtos = products.Select(p => MapToCardDto(p)).ToList();
+
+            return new Berwah.Models.DTO.PagedResult<ProductCardDto>
+            {
+                Items = productDtos,
+                TotalCount = totalCount,
+                Page = searchDto.Page,
+                PageSize = searchDto.PageSize,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)searchDto.PageSize)
+            };
+        }
+
         private ProductCardDto MapToCardDto(Product p)
         {
             return new ProductCardDto
@@ -123,10 +139,24 @@ namespace Berwah.BL.Service
                 Description = p.Description,
                 Price = p.Price,
                 DiscountedPrice = p.Discount,
-                Stock = p.Stock > 0,
-                SubCategoryId = p.SubCategoryId,
+                Currency = "EGP",
+                Location = p.Location ?? "",
                 ImageUrl = p.Image?.Url ?? "",
-                Location = p.Location,
+
+                // 🟢 ربط بيانات القسم الفرعي والرئيسي
+                SubCategoryId = p.SubCategoryId,
+                SubCategoryName = p.Category?.Name ?? "",
+                MainCategoryName = p.Category?.Category?.Name ?? "",
+
+                // 🟢 ربط الحالة
+                Condition = p.Condition.ToString(),
+
+                // 🟢 ربط بيانات البائع والمستخدم بشكل صحيح
+                UserId = p.UserId,
+                SellerName = p.User != null ? $"{p.User.FirstName} {p.User.LastName}".Trim() : "",
+                IsSellerVerified = p.User?.IsVerified ?? false, // أو أي خاصية توثيق لديك
+
+                Stock = p.Stock > 0,
                 CreatedAt = p.CreatedAt
             };
         }

@@ -22,10 +22,16 @@ namespace Berwah.DAL.App
                 await roleManager.CreateAsync(new Role { Name = "Accountant" });
             if (!await roleManager.RoleExistsAsync("Supporter"))
                 await roleManager.CreateAsync(new Role { Name = "Supporter" });
+            if (!await roleManager.RoleExistsAsync("SupervisorForMerchant"))
+                await roleManager.CreateAsync(new Role { Name = "SupervisorForMerchant" });
             if (!await roleManager.RoleExistsAsync("SupervisorUsed"))
-                await roleManager.CreateAsync(new Role { Name = "SupervisorUsed" });
-            if (!await roleManager.RoleExistsAsync("SupervisorUsers"))
-                await roleManager.CreateAsync(new Role { Name = "SupervisorUsers" });
+                await roleManager.CreateAsync(new Role { Name = "SupervisorUsed"});
+            if (!await roleManager.RoleExistsAsync("SupervisorForAd"))
+                await roleManager.CreateAsync(new Role { Name = "SupervisorForAd" });
+            if (!await roleManager.RoleExistsAsync("SupervisorForServices"))
+                await roleManager.CreateAsync(new Role { Name = "SupervisorForServices" });
+            if (!await roleManager.RoleExistsAsync("BossOfSupervisor"))
+                await roleManager.CreateAsync(new Role { Name = "BossOfSupervisor" });
             if (!await roleManager.RoleExistsAsync("Helper"))
                 await roleManager.CreateAsync(new Role { Name = "Helper" });
             if (!await roleManager.RoleExistsAsync("Delivery"))

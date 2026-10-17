@@ -11,6 +11,7 @@ namespace Berwah.BL.Service.IService
     public interface IImageService
     {
         Task<ImageUploadResult> UploadImageAsync(IFormFile file);
+        Task<ImageUploadResult> UploadImageAsync(byte[] fileBytes, string fileName, string contentType);
         Task<DeletionResult> DeleteImageAsync(string publicId);
     }
 }

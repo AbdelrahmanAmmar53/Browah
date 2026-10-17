@@ -3,6 +3,7 @@ using Berwah.BL.Service.IService;
 using Berwah.DAL.App;
 using Berwah.DAL.Repository;
 using Berwah.DAL.Repository.IRepository;
+using Berwah.Hubs;
 using Berwah.Models.DTO;
 using Berwah.Models.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -16,7 +17,6 @@ using System.Text;
 using ThanyaProject.Services;
 
 
-// 1. منع .NET من تعديل أسماء الـ Claims الافتراضية
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 var builder = WebApplication.CreateBuilder(args);
@@ -37,12 +37,19 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ISupporterService, SupporterService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IHomeService, HomeService>();
+builder.Services.AddScoped<IAdvertismentService, AdvertisementService>();
+builder.Services.AddScoped<IAdvertisementDetailService, AdvertisementDetailService>();
+builder.Services.AddScoped<IMerchantService, MerchantService>();
+
 
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<IImageRepository, ImageRepository>();
 builder.Services.AddScoped<ISupporterRepository, SupporterRepository>();
 builder.Services.AddScoped<IHomeRepository, HomeRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddScoped<IAdvertisementRepository, AdvertisementRepository>();
+builder.Services.AddScoped<IMerchantRepository, MerchantRepository>();
+
 
 builder.Services.AddSignalR();
 
@@ -103,7 +110,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Berwah API", Version = "v1" });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Berwah API", Version = "v2" });
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -130,6 +137,8 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 });
+
+builder.Services.AddSignalR();
 
 var app = builder.Build();
 
@@ -162,6 +171,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+app.MapHub<OrderHub>("/orderHub");
 app.MapHub<Berwah.Hubs.ChatHub>("/chatHub");
 
 app.Run();

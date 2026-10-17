@@ -8,6 +8,7 @@ namespace Berwah.Models.Enum
 {
     public enum OrderStatus
     {
+        PendingAdminApproval,
         Pending,
         Processing,
         Shipped,

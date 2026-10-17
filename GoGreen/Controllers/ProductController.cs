@@ -37,7 +37,7 @@ namespace Berwah.Controllers
             return Ok(new { status = "success", product });
         }
 
-        [Authorize(Roles = "Admin, User, Merchant")]
+        [Authorize]
         [HttpPost("CreateProduct")]
         public async Task<IActionResult> CreateProduct([FromForm] CreateProductDto dto)
         {
@@ -46,7 +46,7 @@ namespace Berwah.Controllers
             return Ok(new { status = "success", message = "Product created successfully" });
         }
 
-        [Authorize(Roles = "Admin, User, Merchant")]
+        [Authorize]
         [HttpPut("UpdateProduct/{id}")]
         public async Task<IActionResult> UpdateProduct(int id, [FromBody] CreateProductDto dto)
         {
@@ -54,12 +54,23 @@ namespace Berwah.Controllers
             return Ok(new { status = "success", message = "Product updated successfully" });
         }
 
-        [Authorize(Roles = "Admin, User, Merchant")]
+        [Authorize]
         [HttpDelete("DeleteProduct/{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
             await _productService.DeleteProductAsync(id);
             return Ok(new { status = "success", message = "Product deleted successfully" });
+        }
+
+        [HttpGet("search")]
+        public async Task<IActionResult> Search([FromQuery] SearchProductDto searchDto)
+        {
+            var result = await _productService.SearchProductsAsync(searchDto);
+            return Ok(new
+            {
+                status = "success",
+                data = result
+            });
         }
     }
 }
