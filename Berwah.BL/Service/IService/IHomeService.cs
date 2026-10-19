@@ -10,5 +10,6 @@ namespace Berwah.BL.Service.IService
     public interface IHomeService
     { 
         Task<HomeDto> GetHomeDataAsync(string userId);
+        Task<WebHomeDto> GetWebHomeDataAsync(string? userId);
     }
 }

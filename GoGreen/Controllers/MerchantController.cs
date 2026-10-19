@@ -1,4 +1,5 @@
 ﻿using Berwah.BL.Service.IService;
+using Berwah.Models.DTO;
 using Berwah.Models.DTO.Merchant;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -12,9 +13,11 @@ namespace Berwah.Controllers
     public class MerchantController : ControllerBase
     {
         private readonly IMerchantService _merchantService;
-        public MerchantController(IMerchantService merchantService)
+        private readonly IProductService _productService;
+        public MerchantController(IMerchantService merchantService, IProductService productService)
         {
             _merchantService = merchantService;
+            _productService = productService;
         }
 
         [Authorize(Roles = "Merchant")]
@@ -156,6 +159,38 @@ namespace Berwah.Controllers
             {
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
+        }
+        
+        [HttpGet("sections/{mainCategoryId:int}")]
+        public async Task<IActionResult> GetMenuSections(int mainCategoryId)
+        {
+            var sections = await _productService.GetMenuSectionsByMainCategoryIdAsync(mainCategoryId);
+            return Ok(new { status = "success", data = sections });
+        }
+
+        // GET api/menu/sections/{subCategoryId}/items
+        // returns menu items (products) for a subcategory
+        [HttpGet("sections/{subCategoryId:int}/items")]
+        public async Task<IActionResult> GetMenuItems(int subCategoryId)
+        {
+            var items = await _productService.GetProductsBySubCategoryAsync(subCategoryId);
+            return Ok(new { status = "success", data = items });
+        }
+
+        // POST api/menu/items
+        // create a new menu item (merchant only)
+        [Authorize(Roles = "Merchant")]
+        [HttpPost("items")]
+        public async Task<IActionResult> CreateMenuItem([FromForm] CreateProductDto dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(idClaim, out var userId)) return Unauthorized(new { status = "fail", message = "Invalid user" });
+
+            await _productService.CreateProductAsync(userId, dto);
+
+            return Ok(new { status = "success", message = "Menu item created" });
         }
     }
 }   

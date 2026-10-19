@@ -3,9 +3,11 @@ using Berwah.DAL.App;
 using Berwah.DAL.Repository;
 using Berwah.DAL.Repository.IRepository;
 using Berwah.Models.DTO;
+using Berwah.Models.DTO.Merchant;
 using Berwah.Models.Enum;
 using Berwah.Models.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,118 +19,155 @@ namespace Berwah.BL.Service
 {
     public class ProductService: IProductService
     {
-        private readonly IProductRepository _productRepo;
-        private readonly ApplicationDbContext _context; 
 
-        public ProductService(IProductRepository productRepo, ApplicationDbContext context)
+        private readonly IProductRepository _repo;
+        private readonly ILogger<ProductService> _logger;
+        private readonly IImageService _imageService;
+
+        public ProductService(IProductRepository repo, ILogger<ProductService> logger, IImageService imageService)
         {
-            _productRepo = productRepo;
-            _context = context;
+            _repo = repo;
+            _logger = logger;
+            _imageService = imageService;
         }
 
-        public async Task<IEnumerable<ProductCardDto>> GetAllProductsAsync()
+        // 1. جلب كل المنتجات الموجودة في النظام
+        public Task<IEnumerable<ProductDto>> GetAllProductsAsync(CancellationToken ct = default) =>
+            _repo.GetAllProjectedAsync(ct);
+
+        // 2. جلب كل منتجات المستخدم (التاجر) الحالي
+        public async Task<IEnumerable<ProductDto>> GetProductsByUserIdAsync(int userId, CancellationToken ct = default)
         {
-            var products = await _productRepo.GetAllProductsAsync();
-            return products.Select(MapToCardDto);
+            var products = await _repo.GetProductsByUserIdAsync(userId);
+            return products.Select(p => new ProductDto(
+                p.Id,
+                p.Name,
+                p.Description,
+                p.Price,
+                "EGP",
+                p.ImageUrl ?? string.Empty,
+                p.Stock
+            ));
         }
 
-        public async Task<ProductCardDto?> GetProductByIdAsync(int id)
+        public async Task<ProductDto?> GetProductByIdAsync(int id, CancellationToken ct = default)
         {
-            var product = await _productRepo.GetProductByIdAsync(id);
-            if (product == null) return null;
+            var product = await _repo.GetProductByIdAsync(id);
+            if (product == null)
+                return null;
 
-            // تسجيل مشاهدة المنتج عند فتحه تلقائياً
-            await _productRepo.TrackViewAsync(id);
-            await _productRepo.SaveChangesAsync();
-
-            return MapToCardDto(product);
+            return new ProductDto(
+                product.Id,
+                product.Name,
+                product.Description,
+                product.Price,
+                "EGP",
+                product.ImageUrl ?? string.Empty,
+                product.Stock
+            );
         }
 
-        public async Task CreateProductAsync(int userId, CreateProductDto dto)
+        public async Task<ProductDto> CreateProductAsync(int merchantId, CreateProductDto model, CancellationToken ct = default)
         {
-            var user = await _context.Users.FindAsync(userId);
-            if (user == null) throw new KeyNotFoundException("User not found");
+            string? imageUrl = null;
 
-            // 1. تحديد حالة المنتج تلقائياً
-            ProductCondition finalCondition;
-
-            if (user.UserType == UserType.Merchant)
+            // 1. رفع الصورة على Cloudinary
+            if (model.ImageFile != null && model.ImageFile.Length > 0)
             {
-                finalCondition = ProductCondition.NotApplicable;
+                var uploadResult = await _imageService.UploadImageAsync(model.ImageFile);
+                if (uploadResult != null && uploadResult.SecureUrl != null)
+                {
+                    imageUrl = uploadResult.SecureUrl.AbsoluteUri;
+                }
             }
-            else
-            {
-                finalCondition = dto.Condition;
-            }
 
-            // 2. حساب العمولة
-            var settings = await _context.PlatFormSettings.FirstOrDefaultAsync()
-                           ?? new PlatFormSetting { CommissionValue = 2.5m, IsPercentage = false };
-
-            decimal commission = settings.IsPercentage
-                ? dto.Price * (settings.CommissionValue / 100m)
-                : settings.CommissionValue;
-
-            // 3. إنشاء المنتج
+            // 2. تجهيز كائن الـ Product
             var product = new Product
             {
-                Name = dto.Name,
-                Description = dto.Description,
-                OriginalPrice = dto.Price,
-                CommissionAmount = commission,
-                Price = dto.Price + commission,
-                Stock = dto.Stock,
-                Location = dto.Location,
-                SubCategoryId = dto.SubCategoryId,
-                Condition = finalCondition,
-                UserId = userId,
+                Name = model.Name.Trim(),
+                Description = string.IsNullOrWhiteSpace(model.Description) ? string.Empty : model.Description.Trim(),
+                Price = model.Price,
+                ImageUrl = imageUrl,
+                Location = model.Location,
+                Stock = model.Stock,
+                Condition = model.Condition,
+                CategoryId = model.CategoryId,
+                SubCategoryId = model.SubCategoryId,
+                UserId = merchantId,
                 CreatedAt = DateTime.UtcNow
             };
 
-            await _productRepo.CreateProductAsync(product);
-            await _productRepo.SaveChangesAsync();
+            // 3. الحفظ في الداتا بيز عبر الـ Repository (بحيث يرجع الـ entity مع الـ Id الجديد)
+            var savedProduct = await _repo.AddAsync(product, ct);
+
+            // 4. إرجاع الـ DTO ليحتوي على الـ Id الذي يطلبه الـ Controller
+            return new ProductDto(
+                savedProduct.Id,
+                savedProduct.Name,
+                savedProduct.Description,
+                savedProduct.Price,
+                "EGP", 
+                savedProduct.ImageUrl,
+                savedProduct.Stock
+            );
         }
 
-
-        public async Task UpdateProductAsync(int id, CreateProductDto dto)
+        public async Task<bool> UpdateProductAsync(int id, int userId, UpdateProductDto dto, CancellationToken ct = default)
         {
-            var product = await _productRepo.GetProductByIdAsync(id);
-            if (product == null) throw new KeyNotFoundException("Product not found");
+            // 1. جلب المنتج التأكد أنه يخص نفس التاجر
+            var existingProduct = await _repo.GetProductByIdAsync(id);
+            if (existingProduct == null || existingProduct.UserId != userId)
+                return false;
 
-            product.Name = dto.Name;
-            product.Description = dto.Description;
-            product.Price = dto.Price;
-            product.Stock = dto.Stock;
-            product.Location = dto.Location;
-
-             _productRepo.UpdateProductAsync(product);
-            await _productRepo.SaveChangesAsync();
-        }
-
-        public async Task DeleteProductAsync(int id)
-        {
-            var product = await _productRepo.GetProductByIdAsync(id);
-            if (product == null) throw new KeyNotFoundException("Product not found");
-
-            _productRepo.DeleteProductAsync(product);
-            await _productRepo.SaveChangesAsync();
-        }
-
-        public async Task<Berwah.Models.DTO.PagedResult<ProductCardDto>> SearchProductsAsync(SearchProductDto searchDto)
-        {
-            var (products, totalCount) = await _productRepo.SearchProductsAsync(searchDto);
-
-            var productDtos = products.Select(p => MapToCardDto(p)).ToList();
-
-            return new Berwah.Models.DTO.PagedResult<ProductCardDto>
+            // 2. رفع صورة جديدة إذا وجدت
+            if (dto.ImageFile != null && dto.ImageFile.Length > 0)
             {
-                Items = productDtos,
-                TotalCount = totalCount,
-                Page = searchDto.Page,
-                PageSize = searchDto.PageSize,
-                TotalPages = (int)Math.Ceiling(totalCount / (double)searchDto.PageSize)
-            };
+                var uploadResult = await _imageService.UploadImageAsync(dto.ImageFile);
+                if (uploadResult != null && uploadResult.SecureUrl != null)
+                {
+                    existingProduct.ImageUrl = uploadResult.SecureUrl.AbsoluteUri;
+                }
+            }
+
+            // 3. تحديث البيانات
+            existingProduct.Name = dto.Name;
+            existingProduct.Price = dto.Price;
+            existingProduct.Description = string.IsNullOrWhiteSpace(dto.Description) ? string.Empty : dto.Description.Trim();
+            existingProduct.Location = dto.Location;
+            existingProduct.Stock = dto.Stock;
+            existingProduct.CategoryId = dto.CategoryId;
+            existingProduct.SubCategoryId = dto.SubCategoryId;
+           // existingProduct.Condition = dto.Condition;
+
+            return await _repo.UpdateAsync(existingProduct, ct);
         }
+
+        public async Task<bool> DeleteProductAsync(int id, int userId, CancellationToken ct = default)
+        {
+            var existingProduct = await _repo.GetProductByIdAsync(id);
+            if (existingProduct == null || existingProduct.UserId != userId)
+                return false;
+
+            return await _repo.DeleteAsync(existingProduct, ct);
+        }
+
+        public Task<IEnumerable<ProductDto>> SearchProductsAsync(SearchProductDto query, CancellationToken ct = default) =>
+            _repo.SearchAsync(query, ct);
+
+
+        // New: return products for a subcategory (menu items)
+        public async Task<IEnumerable<ProductCardDto>> GetProductsBySubCategoryAsync(int subCategoryId)
+        {
+            var products = await _repo.GetProductsBySubCategoryIdAsync(subCategoryId);
+            return products.Select(MapToCardDto);
+        }
+
+        // New: return menu sections for a main category
+        public async Task<IEnumerable<MenuSectionDto>> GetMenuSectionsByMainCategoryIdAsync(int mainCategoryId)
+        {
+            return await _repo.GetMenuSectionsByMainCategoryIdAsync(mainCategoryId);
+        }
+
 
         private ProductCardDto MapToCardDto(Product p)
         {
@@ -144,9 +183,10 @@ namespace Berwah.BL.Service
                 ImageUrl = p.Image?.Url ?? "",
 
                 // 🟢 ربط بيانات القسم الفرعي والرئيسي
+                CategoryId = p.CategoryId,
                 SubCategoryId = p.SubCategoryId,
-                SubCategoryName = p.Category?.Name ?? "",
-                MainCategoryName = p.Category?.Category?.Name ?? "",
+               // SubCategoryName = p.Category?.SubCategories.Name ?? "",
+                MainCategoryName = p.Category?.Name ?? "",
 
                 // 🟢 ربط الحالة
                 Condition = p.Condition.ToString(),

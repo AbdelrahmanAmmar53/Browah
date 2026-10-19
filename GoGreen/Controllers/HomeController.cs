@@ -25,5 +25,13 @@ namespace Berwah.Controllers
             var result = await _homeService.GetHomeDataAsync(userId);
             return Ok(result);
         }
+
+        [HttpGet("GetWebHomeData")]
+        public async Task<IActionResult> GetWebHomeData()
+        {
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var result = await _homeService.GetWebHomeDataAsync(userId);
+            return Ok(new { status = "success", data = result });
+        }
     }
 }

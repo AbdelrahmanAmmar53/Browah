@@ -1,12 +1,14 @@
 ﻿using Berwah.DAL.App;
 using Berwah.DAL.Repository.IRepository;
 using Berwah.Models.DTO;
+using Berwah.Models.DTO.Merchant;
 using Berwah.Models.Models;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Berwah.DAL.Repository
@@ -14,20 +16,59 @@ namespace Berwah.DAL.Repository
     public class ProductRepository : IProductRepository
     {
         private readonly ApplicationDbContext _context;
-        public ProductRepository(ApplicationDbContext context)
+
+        public ProductRepository(ApplicationDbContext db)
         {
-            _context = context;
+            _context = db;
         }
-        public async Task<IEnumerable<Product>> GetAllProductsAsync()
+
+        public async Task<IEnumerable<ProductDto>> GetAllProjectedAsync(CancellationToken ct = default)
         {
             return await _context.Products
-                .Include(p => p.Image)
-                .Include(p => p.Category)
-                    .ThenInclude(sc => sc.Category) 
-                .Include(p => p.User)             
                 .AsNoTracking()
                 .OrderByDescending(p => p.CreatedAt)
-                .ToListAsync();
+                .Select(p => new ProductDto(
+                    p.Id,
+                    p.Name,
+                    p.Description,
+                    p.Price,
+                    "EGP",
+                    p.ImageUrl ?? string.Empty,
+                    p.Stock
+                ))
+                .ToListAsync(ct);
+        }
+
+
+        public async Task<Product> AddAsync(Product product, CancellationToken ct = default)
+        {
+            await _context.Products.AddAsync(product, ct);
+            await _context.SaveChangesAsync(ct);
+            return product;
+        }
+
+        public async Task<bool> UpdateAsync(Product product, CancellationToken ct = default)
+        {
+            _context.Products.Update(product);
+            await _context.SaveChangesAsync(ct);
+            return true;
+        }
+
+        public async Task<bool> DeleteAsync(Product product, CancellationToken ct = default)
+        {
+            _context.Products.Remove(product);
+            await _context.SaveChangesAsync(ct);
+            return true;
+        }
+        public async Task<IEnumerable<ProductDto>> SearchAsync(SearchProductDto query, CancellationToken ct = default)
+        {
+            var q = _context.Products.AsNoTracking().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(query.ProductName))
+                q = q.Where(p => EF.Functions.Like(p.Name, $"%{query.ProductName}%"));
+
+            return await q.Select(p => new ProductDto(p.Id, p.Name, p.Description, p.Price, p.Currency, p.ImageUrl, p.Stock))
+                          .ToListAsync(ct);
         }
 
         public async Task<Product?> GetProductByIdAsync(int productId)
@@ -35,12 +76,11 @@ namespace Berwah.DAL.Repository
             return await _context.Products
                 .Include(p => p.Image)
                 .Include(p => p.Category)
-                    .ThenInclude(sc => sc.Category)
-                .Include(p => p.User)             
+                    .ThenInclude(sc => sc.SubCategories)
+                .Include(p => p.User)
                 .FirstOrDefaultAsync(p => p.Id == productId);
         }
 
-       
         public async Task<IEnumerable<Product>> GetProductsByUserIdAsync(int userId)
         {
             return await _context.Products
@@ -52,7 +92,6 @@ namespace Berwah.DAL.Repository
                 .ToListAsync();
         }
 
-        // Implementation for: Task<IEnumerable<Product>> GetProductsBySubCategoryIdAsync(int subCategoryId);
         public async Task<IEnumerable<Product>> GetProductsBySubCategoryIdAsync(int subCategoryId)
         {
             return await _context.Products
@@ -62,21 +101,6 @@ namespace Berwah.DAL.Repository
                 .AsNoTracking()
                 .OrderByDescending(p => p.CreatedAt)
                 .ToListAsync();
-        }
-
-        public async Task CreateProductAsync(Product product)
-        {
-            await _context.Products.AddAsync(product);
-        }
-
-        public void UpdateProductAsync(Product product)
-        {
-            _context.Products.Update(product);
-        }
-
-        public void DeleteProductAsync(Product product)
-        {
-            _context.Products.Remove(product);
         }
 
         public async Task TrackViewAsync(int productId)
@@ -102,66 +126,23 @@ namespace Berwah.DAL.Repository
                 .ToListAsync();
         }
 
-        public async Task<(IEnumerable<Product> Items, int TotalCount)> SearchProductsAsync(SearchProductDto searchDto)
+        public async Task<IEnumerable<MenuSectionDto>> GetMenuSectionsByMainCategoryIdAsync(int mainCategoryId)
         {
-            var query = _context.Products
-                .Include(p => p.Image)
-                .Include(p => p.Category)
-                    .ThenInclude(sc => sc.Category)
-                .Include(p => p.User)
-                .AsNoTracking();
-
-            // 1. فلترة بالاسم أو الوصف
-            if (!string.IsNullOrWhiteSpace(searchDto.ProductName))
-            {
-                var searchTerm = searchDto.ProductName.Trim().ToLower();
-                query = query.Where(p =>
-                    p.Name.ToLower().Contains(searchTerm) ||
-                    p.Description.ToLower().Contains(searchTerm));
-            }
-
-            // 2. فلترة بالقسم الرئيسي
-            if (searchDto.MainCategoryId.HasValue)
-            {
-                query = query.Where(p => p.Category.CategoryId == searchDto.MainCategoryId.Value);
-            }
-
-            // 3. فلترة بالقسم الفرعي
-            if (searchDto.SubCategoryId.HasValue)
-            {
-                query = query.Where(p => p.SubCategoryId == searchDto.SubCategoryId.Value);
-            }
-
-            // 4. فلترة بالموقع/المدينة
-            if (!string.IsNullOrWhiteSpace(searchDto.Location))
-            {
-                query = query.Where(p => p.Location.Contains(searchDto.Location));
-            }
-
-            // 5. فلترة بالحد الأدنى للسعر (MinPrice) 🟢 [مضاف]
-            if (searchDto.MinPrice.HasValue && searchDto.MinPrice.Value > 0)
-            {
-                query = query.Where(p => p.Price >= searchDto.MinPrice.Value);
-            }
-
-            // 6. فلترة بالحد الأقصى للسعر (MaxPrice) 🟢 [مضاف]
-            if (searchDto.MaxPrice.HasValue && searchDto.MaxPrice.Value > 0)
-            {
-                query = query.Where(p => p.Price <= searchDto.MaxPrice.Value);
-            }
-
-            // حساب العدد الإجمالي للنتائج قبل الـ Pagination
-            var totalCount = await query.CountAsync();
-
-            // تطبيق الـ Pagination والترتيب من الأحدث للأقدم
-            var items = await query
-                .OrderByDescending(p => p.CreatedAt)
-                .Skip((searchDto.Page - 1) * searchDto.PageSize)
-                .Take(searchDto.PageSize)
+            var sections = await _context.SubCategories
+                .AsNoTracking()
+                .Where(sc => sc.CategoryId == mainCategoryId)
+                .Select(sc => new MenuSectionDto
+                {
+                    Id = sc.Id,
+                    Name = sc.Name,
+                    ProductCount = _context.Products.Count(p => p.SubCategoryId == sc.Id && p.IsActive)
+                })
+                .OrderBy(sc => sc.Name)
                 .ToListAsync();
 
-            return (items, totalCount);
+            return sections;
         }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

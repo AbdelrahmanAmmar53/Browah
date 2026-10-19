@@ -131,6 +131,13 @@ namespace Berwah.DAL.App
                 entity.Property(s => s.MinWithdrawalAmount).HasPrecision(18, 2);
                 entity.Property(s => s.WithdrawalFeeFixed).HasPrecision(18, 2);
             });
+            builder.Entity<Transaction>()
+               .Property(t => t.Amount)
+               .HasColumnType("decimal(18,2)");
+
+            builder.Entity<User>()
+                .Property(u => u.MinimumOrder)
+                .HasColumnType("decimal(18,2)");
         }
     }
 }

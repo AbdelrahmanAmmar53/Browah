@@ -1,5 +1,7 @@
 ﻿using Berwah.Models.DTO;
+using Berwah.Models.DTO.Merchant;
 using Berwah.Models.Models;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,16 +12,26 @@ namespace Berwah.DAL.Repository.IRepository
 {
     public interface IProductRepository
     {
-        Task CreateProductAsync(Product product);
-        void UpdateProductAsync(Product product);
-        void DeleteProductAsync(Product product);
-        Task<Product> GetProductByIdAsync(int productId);
-        Task<IEnumerable<Product>> GetAllProductsAsync();
+        Task<IEnumerable<ProductDto>> GetAllProjectedAsync(CancellationToken ct = default);
+        Task<Product> AddAsync(Product product, CancellationToken ct = default);
+
+        Task<bool> UpdateAsync(Product product, CancellationToken ct = default);
+    
+        Task<bool> DeleteAsync(Product product, CancellationToken ct = default);
+     
+        Task<IEnumerable<ProductDto>> SearchAsync(SearchProductDto query, CancellationToken ct = default);
+        Task<Product?> GetProductByIdAsync(int productId);
+
         Task<IEnumerable<Product>> GetProductsByUserIdAsync(int userId);
+        
         Task<IEnumerable<Product>> GetProductsBySubCategoryIdAsync(int subCategoryId);
+        
         Task TrackViewAsync(int productId);
+        
         Task<IEnumerable<Product>> GetRecentlyViewedAsync(int count);
-        Task<(IEnumerable<Product> Items, int TotalCount)> SearchProductsAsync(SearchProductDto searchDto);
+        
+        Task<IEnumerable<MenuSectionDto>> GetMenuSectionsByMainCategoryIdAsync(int mainCategoryId);
+        
         Task SaveChangesAsync();
     }
 }

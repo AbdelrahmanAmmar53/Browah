@@ -385,6 +385,9 @@ namespace Berwah.DAL.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("CommissionAmount")
                         .HasColumnType("decimal(18,2)");
 
@@ -408,6 +411,9 @@ namespace Berwah.DAL.Migrations
                     b.Property<int?>("ImageId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -428,13 +434,15 @@ namespace Berwah.DAL.Migrations
                     b.Property<int>("Stock")
                         .HasColumnType("int");
 
-                    b.Property<int>("SubCategoryId")
+                    b.Property<int?>("SubCategoryId")
                         .HasColumnType("int");
 
                     b.Property<int>("UserId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
 
                     b.HasIndex("ImageId");
 
@@ -1073,15 +1081,19 @@ namespace Berwah.DAL.Migrations
 
             modelBuilder.Entity("Berwah.Models.Models.Product", b =>
                 {
+                    b.HasOne("Berwah.Models.Models.Category", "Category")
+                        .WithMany("Products")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("Berwah.Models.Models.Image", "Image")
                         .WithMany()
                         .HasForeignKey("ImageId");
 
-                    b.HasOne("Berwah.Models.Models.SubCategory", "Category")
+                    b.HasOne("Berwah.Models.Models.SubCategory", "SubCategory")
                         .WithMany("Products")
-                        .HasForeignKey("SubCategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("SubCategoryId");
 
                     b.HasOne("Berwah.Models.Models.User", "User")
                         .WithMany("Products")
@@ -1092,6 +1104,8 @@ namespace Berwah.DAL.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("Image");
+
+                    b.Navigation("SubCategory");
 
                     b.Navigation("User");
                 });
@@ -1216,6 +1230,8 @@ namespace Berwah.DAL.Migrations
             modelBuilder.Entity("Berwah.Models.Models.Category", b =>
                 {
                     b.Navigation("Advertisments");
+
+                    b.Navigation("Products");
 
                     b.Navigation("SubCategories");
                 });

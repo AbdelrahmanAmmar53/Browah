@@ -24,6 +24,15 @@ namespace Berwah.DAL.Repository
              .ToListAsync();
         }
 
+        public async Task<IEnumerable<SubCategory>> GetSubCategoriesByMainCategoryNameAsync(string categoryName)
+        {
+            return await _context.SubCategories
+                .AsNoTracking()
+                .Where(sc => sc.Category != null && sc.Category.Name == categoryName)
+                .Include(sc => sc.Category)
+                .ToListAsync();
+        }
+
         public async Task<IEnumerable<Product>> GetLatestProductsAsync(int count)
         {
             return await _context.Products

@@ -37,10 +37,13 @@ namespace Berwah.Models.Models
         public int? ImageId { get; set; }
         [AllowNull]
         public Image? Image { get; set; }
+        public string? ImageUrl { get; set; }
         public int UserId { get; set; }
         public User User { get; set; }
-        public int SubCategoryId { get; set; }
-        public SubCategory Category { get; set; }
+        public int CategoryId { get; set; }
+        public Category Category { get; set; }
+        public int? SubCategoryId { get; set; }
+        public SubCategory? SubCategory { get; set; }
         [JsonIgnore]
         public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 

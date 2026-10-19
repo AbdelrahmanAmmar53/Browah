@@ -10,6 +10,7 @@ namespace Berwah.DAL.Repository.IRepository
     public interface IHomeRepository
     {
         Task<IEnumerable<Category>> GetMainCategoriesAsync();
+        Task<IEnumerable<SubCategory>> GetSubCategoriesByMainCategoryNameAsync(string categoryName);
         Task<IEnumerable<Product>> GetLatestProductsAsync(int count);
         Task<IEnumerable<Product>> GetRecentlyViewedProductsAsync(string userId,int count);
         Task<IEnumerable<Advertisment>> GetTopAdvertisementsAsync(int count);
