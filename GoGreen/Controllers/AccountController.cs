@@ -270,7 +270,6 @@ namespace Berwah.Controllers
                         model.VehicleImageUrl = res.SecureUrl.ToString();
                 }
 
-                // تفريغ ملفات الـ IFormFile الثقيلة من الذاكرة لتجنب مشاكل الـ Serialization والتخزين المؤقت
                 model.PersonalImage = null;
                 model.NationalIdImage = null;
                 model.DrivingLicenseImage = null;

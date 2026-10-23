@@ -11,8 +11,15 @@ namespace Berwah.DAL.Repository.IRepository
     {
         Task<IEnumerable<Category>> GetMainCategoriesAsync();
         Task<IEnumerable<SubCategory>> GetSubCategoriesByMainCategoryNameAsync(string categoryName);
-        Task<IEnumerable<Product>> GetLatestProductsAsync(int count);
+        Task<IEnumerable<Advertisment>> GetLatestAdvertisementsAsync(int count);
+        Task<IEnumerable<Advertisment>> GetVipAdvertisementsAsync();
+        Task<IEnumerable<Advertisment>> GetFeaturedAdvertisementsAsync();
+        Task<IEnumerable<User>> GetMerchantsByTypeAsync(string businessType);
         Task<IEnumerable<Product>> GetRecentlyViewedProductsAsync(string userId,int count);
-        Task<IEnumerable<Advertisment>> GetTopAdvertisementsAsync(int count);
+        Task<IEnumerable<User>> GetHomeMadeFoodMerchantsAsync();
+        Task<bool> AddServiceRequestAsync(ServiceRequest serviceRequest);
+        Task<IEnumerable<ServiceRequest>> GetAvailableServiceRequestsAsync(int? subCategoryId);
+        Task<IEnumerable<ServiceRequest>> GetAllServiceRequestsAsync();
+        //Task<IEnumerable<Advertisment>> GetTopAdvertisementsAsync(int count);
     }
 }

@@ -210,6 +210,23 @@ namespace Berwah.BL.Service
             await _merchantRepository.UpdateMerchantAsync(merchant);
             return true;
         }
+
+        public async Task<IEnumerable<MerchantCardDto>> GetMerchantsByBusinessTypeAsync(string businessType)
+        {
+
+            var merchants = await _merchantRepository.GetMerchantsByBusinessTypeAsync(businessType);
+
+            return merchants.Select(m => new MerchantCardDto
+            {
+                Id = m.Id,
+                BusinessName = m.BusinessName ?? $"{m.FirstName} {m.LastName}",
+                BusinessDescription = m.BusinessDescription ?? "",
+                BusinessType = m.BusinessType,
+                MerchantImageUrl = m.Images?.FirstOrDefault()?.Url ?? "",
+                Address = m.Address ?? "",
+                IsOpen = m.AcceptOrdersAutomatically
+            }).ToList();
+        }
     }
 }
     

@@ -16,5 +16,6 @@ namespace Berwah.BL.Service.IService
         Task<bool> ConfirmOrderRejectionAsync(int orderId, int merchantId, ConfirmRejectOrderDto model);
         Task<MerchantProfileResponseDto?> GetMerchantProfileAsync(int merchantId);
         Task<bool> UpdateWorkHoursAsync(int merchantId, string workHours);
+        Task<IEnumerable<MerchantCardDto>> GetMerchantsByBusinessTypeAsync(string businessType);
     }
 }

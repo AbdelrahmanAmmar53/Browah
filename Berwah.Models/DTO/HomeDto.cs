@@ -8,7 +8,7 @@ namespace Berwah.Models.DTO
 {
     public class HomeDto
     {
-        public List<BannerDto> Banners { get; set; } = new();
+        public List<AdvertisementCardDto> Banners { get; set; } = new();
         public List<CategorySummaryDto> Categories { get; set; } = new();
         public List<AdvertisementCardDto> Advertisements { get; set; } = new();
         public List<ProductCardDto> RecentlyViewedProducts { get; set; } = new();

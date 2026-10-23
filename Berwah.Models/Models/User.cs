@@ -41,6 +41,7 @@ namespace Berwah.Models.Models
         public string? WorkHours { get; set; }
         public bool AcceptOrdersAutomatically { get; set; }
 
+        public string? ServiceName { get; set; }
 
         public UserType UserType { get; set; }
         public DateTime CreatedAt { get; set; }
@@ -51,5 +52,6 @@ namespace Berwah.Models.Models
         public virtual ICollection<Ticket> Tickets { get; set; }
         public virtual ICollection<Product> Products { get; set; }
         public virtual ICollection<VisaCard> VisaCards { get; set; }
+        public virtual ICollection<ServiceRequest> ServiceRequests { get; set; }
     }
 }

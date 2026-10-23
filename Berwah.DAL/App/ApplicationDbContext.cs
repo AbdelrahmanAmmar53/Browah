@@ -36,6 +36,7 @@ namespace Berwah.DAL.App
         public DbSet<VisaCard> VisaCards { get; set; }
         public DbSet<Transaction> Transactions { get; set; }
 
+        public DbSet<ServiceRequest> ServiceRequests { get; set; }
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
@@ -71,6 +72,13 @@ namespace Berwah.DAL.App
             builder.Entity<Advertisment>()
                  .Property(a => a.Price)
                  .HasColumnType("decimal(18,2)");
+
+            builder.Entity<Advertisment>()
+                 .HasMany(a => a.Specifications)
+                 .WithOne() 
+                 .HasForeignKey(s => s.AdvertisementId)
+
+        .OnDelete(DeleteBehavior.Cascade);
             builder.Entity<Image>()
                 .HasOne(i => i.User)
                 .WithMany(u => u.Images)
@@ -92,7 +100,6 @@ namespace Berwah.DAL.App
                 .HasForeignKey(ai => ai.ImageId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Advertisement Specifications configuration
             builder.Entity<AdvertisementSpecification>()
                 .HasOne(s => s.Advertisement)
                 .WithMany()
@@ -138,6 +145,11 @@ namespace Berwah.DAL.App
             builder.Entity<User>()
                 .Property(u => u.MinimumOrder)
                 .HasColumnType("decimal(18,2)");
+            builder.Entity<ServiceRequest>()
+                .HasOne(sr => sr.User)
+                .WithMany() 
+                .HasForeignKey(sr => sr.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

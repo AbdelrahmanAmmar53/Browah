@@ -192,5 +192,19 @@ namespace Berwah.Controllers
 
             return Ok(new { status = "success", message = "Menu item created" });
         }
+
+        [HttpGet("by-business-type/{businessType}")]
+        public async Task<IActionResult> GetMerchantsByBusinessType(string businessType)
+        {
+            try
+            {
+                var merchants = await _merchantService.GetMerchantsByBusinessTypeAsync(businessType);
+                return Ok(new { status = "success", data = merchants });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
     }
 }   

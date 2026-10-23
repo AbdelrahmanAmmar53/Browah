@@ -11,6 +11,7 @@ namespace Berwah.DAL.Repository.IRepository
     public interface IAdvertisementRepository
     {
         Task<Advertisment> AddAsync(Advertisment advertisement);
+        Task<IEnumerable<Advertisment>> GetByUserIdAsync(int userId);
         Task<Advertisment?> GetByIdAsync(int id);
         Task<IEnumerable<Advertisment>> GetAllAsync();
         void Update(Advertisment advertisement);

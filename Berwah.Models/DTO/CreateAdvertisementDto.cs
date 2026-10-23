@@ -43,6 +43,8 @@ namespace Berwah.Models.DTO
         public List<IFormFile> Images { get; set; } = new();
 
         // اختيارية: قائمة المواصفات أثناء الإنشاء
-        public List<SpecificationItemDto> Specifications { get; set; } = new();
+        // public List<SpecificationItemDto> Specifications { get; set; } = new();
+        public string? Key { get; set; }
+        public string? Value { get; set; }
     }
 }

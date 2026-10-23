@@ -49,10 +49,41 @@ namespace Berwah.Controllers
             }
         }
 
+        [Authorize]
+        [HttpGet("my-advertisements")]
+        public async Task<IActionResult> GetMyAdvertisements(CancellationToken ct = default)
+        {
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            {
+                return Unauthorized(new { status = "fail", message = "غير مصرح لك بالوصول" });
+            }
+
+            try
+            {
+                
+                var ads = await _advertisementService.GetUserAdvertisementsAsync(userId); 
+                return Ok(new
+                {
+                    status = "success",
+                    data = ads
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    status = "error",
+                    message = "حدث خطأ أثناء جلب الإعلانات",
+                    details = ex.Message
+                });
+            }
+        }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetAdvertisementById(int id)
         {
-            var advertisement = await _advertisementDetailService.GetAdvertisementDetailAsync(id);
+            var advertisement = await _advertisementService.GetByIdAsync(id);
             if (advertisement == null)
             {
                 return NotFound(new { status = "fail", message = "الإعلان غير موجود" });

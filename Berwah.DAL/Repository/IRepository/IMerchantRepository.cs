@@ -16,6 +16,7 @@ namespace Berwah.DAL.Repository.IRepository
         Task UpdateMerchantAsync(User merchant);
         Task RecordMerchantPenaltyTransactionAsync(int merchantId, decimal penaltyAmount, string reason);
         Task<int> GetActiveProductsCountAsync(int merchantId);
+        Task<IEnumerable<User>> GetMerchantsByBusinessTypeAsync(string businessType);
 
     }
 }

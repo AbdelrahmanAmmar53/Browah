@@ -1,5 +1,6 @@
 ﻿using Berwah.DAL.App;
 using Berwah.DAL.Repository.IRepository;
+using Berwah.Models.Enum;
 using Berwah.Models.Models;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -71,6 +72,14 @@ namespace Berwah.DAL.Repository
             await _context.SaveChangesAsync();
         }
 
+        public async Task<IEnumerable<User>> GetMerchantsByBusinessTypeAsync(string businessType)
+        {
+            return await _context.Users
+                .AsNoTracking()
+                .Where(u => u.UserType == UserType.Merchant && u.BusinessType != null && u.BusinessType.ToLower() == businessType.ToLower())
+                .Include(u => u.Images)
+                .ToListAsync();
+        }
         public async Task<int> GetActiveProductsCountAsync(int merchantId)
         {
             return await _context.Products.CountAsync(p => p.UserId == merchantId && p.IsActive);

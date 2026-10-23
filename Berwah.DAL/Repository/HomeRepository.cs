@@ -1,5 +1,6 @@
 ﻿using Berwah.DAL.App;
 using Berwah.DAL.Repository.IRepository;
+using Berwah.Models.Enum;
 using Berwah.Models.Models;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -13,17 +14,47 @@ namespace Berwah.DAL.Repository
     public class HomeRepository : IHomeRepository
     {
         private readonly ApplicationDbContext _context;
-        public HomeRepository(ApplicationDbContext context)
-        {
-            _context = context;
-        }
+        public HomeRepository(ApplicationDbContext context) => _context = context;
+
         public async Task<IEnumerable<Category>> GetMainCategoriesAsync()
         {
-            return await _context.Categories
-             .AsNoTracking()
-             .ToListAsync();
+            return await _context.Categories.AsNoTracking().ToListAsync();
         }
 
+        public async Task<IEnumerable<Advertisment>> GetLatestAdvertisementsAsync(int count)
+        {
+            return await _context.Advertisements
+                .Include(a => a.AdvertismentImages)
+                    .ThenInclude(ai => ai.Image)
+                .Include(a => a.User)
+                .Include(a => a.Category)
+                .AsNoTracking()
+                .OrderByDescending(a => a.CreatedAt)
+                .Take(count)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Advertisment>> GetVipAdvertisementsAsync()
+        {
+            return await _context.Advertisements
+                .Include(a => a.AdvertismentImages)
+                    .ThenInclude(ai => ai.Image)
+                .AsNoTracking()
+                .Where(a => a.PromotionPlan.ToString() == "VIP")
+                .OrderByDescending(a => a.CreatedAt)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Advertisment>> GetFeaturedAdvertisementsAsync()
+        {
+            return await _context.Advertisements
+                .Include(a => a.AdvertismentImages)
+                    .ThenInclude(ai => ai.Image)
+                .AsNoTracking()
+                .Where(a => a.PromotionPlan.ToString() == "Featured")
+                .OrderByDescending(a => a.CreatedAt)
+                .ToListAsync();
+        }
         public async Task<IEnumerable<SubCategory>> GetSubCategoriesByMainCategoryNameAsync(string categoryName)
         {
             return await _context.SubCategories
@@ -33,62 +64,61 @@ namespace Berwah.DAL.Repository
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<Product>> GetLatestProductsAsync(int count)
+        public async Task<IEnumerable<User>> GetMerchantsByTypeAsync(string businessType)
         {
-            return await _context.Products
-                .Include(p => p.Image)
-                .Include(p => p.Category)
-                .Include(p => p.User)
+            return await _context.Users
                 .AsNoTracking()
-                .OrderByDescending(p => p.Id)
-                .Take(count)
+                .Where(u => u.UserType == UserType.Merchant && u.BusinessType != null && u.BusinessType.ToLower() == businessType.ToLower())
+                .Include(u => u.Images)
+                .ToListAsync();
+        }
+        public async Task<IEnumerable<User>> GetHomeMadeFoodMerchantsAsync()
+        {
+            return await _context.Users
+                .AsNoTracking()
+                .Where(u => u.UserType == UserType.Merchant && u.BusinessType != null && u.BusinessType.ToLower() == "homemadefood") 
+                .Include(u => u.Images)
+                .ToListAsync();
+        }
+
+
+        public async Task<bool> AddServiceRequestAsync(ServiceRequest serviceRequest)
+        {
+            await _context.ServiceRequests.AddAsync(serviceRequest);
+            return await _context.SaveChangesAsync() > 0;
+        }
+
+        public async Task<IEnumerable<ServiceRequest>> GetAvailableServiceRequestsAsync(int? subCategoryId)
+        {
+            var query = _context.ServiceRequests
+                .AsNoTracking()
+                .Where(r => r.Status == ServiceRequestStatus.Pending);
+
+            if (subCategoryId.HasValue)
+            {
+                query = query.Where(r => r.SubCategoryId == subCategoryId.Value); 
+            }
+
+            return await query
+                .Include(r => r.User).ThenInclude(u => u.Images)
+                .Include(r => r.SubCategory) 
+                .OrderByDescending(r => r.CreatedAt)
+                .ToListAsync();
+        }
+        public async Task<IEnumerable<ServiceRequest>> GetAllServiceRequestsAsync()
+        {
+            return await _context.ServiceRequests
+                .AsNoTracking()
+                .Where(r => r.Status == ServiceRequestStatus.Pending)
+                .Include(r => r.User).ThenInclude(u => u.Images)
+                .Include(r => r.SubCategory)
+                .OrderByDescending(r => r.CreatedAt)
                 .ToListAsync();
         }
 
         public async Task<IEnumerable<Product>> GetRecentlyViewedProductsAsync(string? userId, int count)
         {
-            if (string.IsNullOrEmpty(userId)) return new List<Product>();
-
-            var recentProductGroup = await _context.RecentlyViewedProducts
-                .AsNoTracking()
-                .Where(pv => pv.UserId == userId)
-                .GroupBy(pv => pv.ProductId)
-                .Select(g => new
-                {
-                    ProductId = g.Key,
-                    MaxViewedAt = g.Max(pv => pv.ViewedAt)
-                })
-                .OrderByDescending(x => x.MaxViewedAt)
-                .Take(count)
-                .ToListAsync();
-
-            if (!recentProductGroup.Any())
-                return new List<Product>();
-
-            var productIds = recentProductGroup.Select(x => x.ProductId).ToList();
-
-            var products = await _context.Products
-                .AsNoTracking()
-                .Where(p => productIds.Contains(p.Id))
-                .Include(p => p.Image)
-                .Include(p => p.Category)
-                .Include(p => p.User)
-                .ToListAsync();
-
-            return productIds
-                .Select(id => products.FirstOrDefault(p => p.Id == id))
-                .Where(p => p != null)!;
-        }
-
-        public async Task<IEnumerable<Advertisment>> GetTopAdvertisementsAsync(int count)
-        {
-            return await _context.Advertisements
-                .Include(a => a.AdvertismentImages)
-                    .ThenInclude(ai => ai.Image)
-                .AsNoTracking()
-                .OrderByDescending(a => a.CreatedAt)
-                .Take(count)
-                .ToListAsync();
+            return new List<Product>();
         }
     }
 }

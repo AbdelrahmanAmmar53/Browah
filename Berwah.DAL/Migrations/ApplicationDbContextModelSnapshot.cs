@@ -509,6 +509,62 @@ namespace Berwah.DAL.Migrations
                     b.ToTable("AspNetRoles", (string)null);
                 });
 
+            modelBuilder.Entity("Berwah.Models.Models.ServiceRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AttachmentUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeliveryAddress")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("EstimatedPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PickupAddress")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PreferredDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PreferredTimeSlot")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SubCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UserId1")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubCategoryId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId1");
+
+                    b.ToTable("ServiceRequests");
+                });
+
             modelBuilder.Entity("Berwah.Models.Models.SubCategory", b =>
                 {
                     b.Property<int>("Id")
@@ -765,6 +821,9 @@ namespace Berwah.DAL.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("SecurityStamp")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ServiceName")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ThirdName")
@@ -1121,6 +1180,29 @@ namespace Berwah.DAL.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("Berwah.Models.Models.ServiceRequest", b =>
+                {
+                    b.HasOne("Berwah.Models.Models.SubCategory", "SubCategory")
+                        .WithMany()
+                        .HasForeignKey("SubCategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Berwah.Models.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Berwah.Models.Models.User", null)
+                        .WithMany("ServiceRequests")
+                        .HasForeignKey("UserId1");
+
+                    b.Navigation("SubCategory");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Berwah.Models.Models.SubCategory", b =>
                 {
                     b.HasOne("Berwah.Models.Models.Category", "Category")
@@ -1270,6 +1352,8 @@ namespace Berwah.DAL.Migrations
                     b.Navigation("Orders");
 
                     b.Navigation("Products");
+
+                    b.Navigation("ServiceRequests");
 
                     b.Navigation("Tickets");
 

@@ -27,13 +27,42 @@ namespace Berwah.DAL.Repository
 
         public async Task<Advertisment?> GetByIdAsync(int id)
         {
-            return await _context.Advertisements
+            var ad = await _context.Advertisements
                 .Include(a => a.User)
                 .Include(a => a.Category)
                 .Include(a => a.AdvertismentImages)
                     .ThenInclude(ai => ai.Image)
-                .AsNoTracking()
                 .FirstOrDefaultAsync(a => a.Id == id);
+
+            if (ad != null)
+            {
+                ad.Specifications = await _context.AdvertisementSpecifications
+                    .Where(s => s.AdvertisementId == id)
+                    .ToListAsync();
+            }
+
+            return ad;
+        }
+
+        public async Task<IEnumerable<Advertisment>> GetByUserIdAsync(int userId)
+        {
+
+            var ads = await _context.Advertisements
+                .Where(a => a.UserId == userId)
+                .Include(a => a.AdvertismentImages)
+                    .ThenInclude(ai => ai.Image)
+                .Include(a => a.Category)
+                .OrderByDescending(a => a.CreatedAt)
+                .ToListAsync();
+
+            foreach (var ad in ads)
+            {
+                ad.Specifications = await _context.AdvertisementSpecifications
+                    .Where(s => s.AdvertisementId == ad.Id)
+                    .ToListAsync();
+            }
+
+            return ads;
         }
 
         public async Task<IEnumerable<Advertisment>> GetAllAsync()
@@ -43,6 +72,7 @@ namespace Berwah.DAL.Repository
                 .Include(a => a.Category)
                 .Include(a => a.AdvertismentImages)
                     .ThenInclude(ai => ai.Image)
+                .Include(a => a.Specifications) 
                 .AsNoTracking()
                 .OrderByDescending(a => a.CreatedAt)
                 .ToListAsync();
