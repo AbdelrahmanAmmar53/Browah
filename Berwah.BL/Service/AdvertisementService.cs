@@ -93,9 +93,39 @@ namespace Berwah.BL.Service
             return MapToResponseDto(ad);
         }
 
+        public async Task<bool> DeleteAdvertisementAsync(int advertisementId, int userId)
+        {
+
+            var ad = await _adRepository.GetByIdAsync(advertisementId);
+            if (ad == null) return false;
+
+
+            if (ad.UserId != userId)
+            {
+                return false;
+            }
+
+
+            await _adRepository.DeleteAsync(ad);
+            return true;
+        }
+
         public async Task<IEnumerable<AdvertisementResponseDto>> GetUserAdvertisementsAsync(int userId)
         {
             var ads = await _adRepository.GetByUserIdAsync(userId);
+            return ads.Select(MapToResponseDto).ToList();
+        }
+
+        public async Task<IEnumerable<AdvertisementResponseDto>> GetAllFeedAsync()
+        {
+            var ads = await _adRepository.GetAllAsync();
+            return ads.Select(MapToResponseDto).ToList();
+        }
+
+        public async Task<IEnumerable<AdvertisementResponseDto>> GetBrowahMarketFeedAsync()
+        {
+
+            var ads = await _adRepository.GetBrowahMarketFeedAsync();
             return ads.Select(MapToResponseDto).ToList();
         }
 

@@ -91,6 +91,37 @@ namespace Berwah.Controllers
             return Ok(new { status = "success", data = advertisement });
         }
 
+        [Authorize]
+        [HttpDelete("DeleteAdvertisement/{id}")]
+        public async Task<IActionResult> DeleteAdvertisement(int id)
+        {
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            {
+                return Unauthorized(new { status = "fail", message = "غير مصرح لك بالوصول" });
+            }
+
+            try
+            {
+                var deleted = await _advertisementService.DeleteAdvertisementAsync(id, userId);
+                if (!deleted)
+                {
+                    return NotFound(new { status = "fail", message = "الإعلان غير موجود أو ليس لديك صلاحية لحذفه" });
+                }
+
+                return Ok(new { status = "success", message = "تم حذف الإعلان وجميع المواصفات المرتبطة به بنجاح" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    status = "error",
+                    message = "حدث خطأ أثناء حذف الإعلان",
+                    details = ex.Message
+                });
+            }
+        }
+
         [HttpGet("GetSpecifications/{advertisementId}")]
         public async Task<IActionResult> GetSpecifications(int advertisementId)
         {
@@ -136,6 +167,25 @@ namespace Berwah.Controllers
             {
                 return BadRequest(new { status = "fail", message = ex.Message });
             }
+        }
+        [Authorize]
+        [HttpGet("general-feed")]
+        public async Task<IActionResult> GetGeneralFeed()
+        {
+            var ads = await _advertisementService.GetAllFeedAsync();
+            return Ok(new { status = "success", data = ads });
+        }
+
+        [Authorize]
+        [HttpGet("browah-market")]
+        public async Task<IActionResult> GetBrowahMarket()
+        {
+            var ads = await _advertisementService.GetBrowahMarketFeedAsync();
+            return Ok(new
+            {
+                status = "success",
+                data = ads
+            });
         }
     }
 }

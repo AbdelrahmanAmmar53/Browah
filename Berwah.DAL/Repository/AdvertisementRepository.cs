@@ -83,9 +83,31 @@ namespace Berwah.DAL.Repository
             _context.Advertisements.Update(advertisement);
         }
 
-        public void Delete(Advertisment advertisement)
+        public async Task DeleteAsync(Advertisment advertisement)
         {
+
+            var specs = await _context.AdvertisementSpecifications
+                .Where(s => s.AdvertisementId == advertisement.Id)
+                .ToListAsync();
+
+            if (specs.Any())
+            {
+                _context.AdvertisementSpecifications.RemoveRange(specs);
+            }
+
+            var adImages = await _context.AdvertismentImages
+                .Where(ai => ai.AdvertismentId == advertisement.Id) 
+                .ToListAsync();
+
+            if (adImages.Any())
+            {
+                _context.AdvertismentImages.RemoveRange(adImages);
+            }
+
+
             _context.Advertisements.Remove(advertisement);
+
+            await _context.SaveChangesAsync();
         }
 
         public async Task<bool> SaveChangesAsync()
@@ -134,6 +156,20 @@ namespace Berwah.DAL.Repository
                 .OrderByDescending(a => a.CreatedAt)
                 .Take(count)
                 .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Advertisment>> GetBrowahMarketFeedAsync()
+        {
+            return await _context.Advertisements
+                .Include(a => a.User)
+                    .ThenInclude(u => u.UserRole)          
+                        .ThenInclude(ur => ur.Role)       
+                .Include(a => a.AdvertismentImages)
+                    .ThenInclude(ai => ai.Image)
+                .Include(a => a.Specifications)
+                .Where(a => a.User.UserName == "browah" || a.User.UserRole.Any(ur => ur.Role.Name == "Admin")) 
+                .OrderByDescending(a => a.CreatedAt)
                 .ToListAsync();
         }
     }

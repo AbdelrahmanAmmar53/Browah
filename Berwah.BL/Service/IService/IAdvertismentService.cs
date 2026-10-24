@@ -11,6 +11,9 @@ namespace Berwah.BL.Service.IService
     {
         Task<AdvertisementResponseDto> CreateAdvertisementAsync(CreateAdvertisementDto dto, int userId);
         Task<AdvertisementResponseDto?> GetByIdAsync(int id);
+        Task<bool> DeleteAdvertisementAsync(int advertisementId, int userId);
         Task<IEnumerable<AdvertisementResponseDto>> GetUserAdvertisementsAsync(int userId);
+        Task<IEnumerable<AdvertisementResponseDto>> GetAllFeedAsync();
+        Task<IEnumerable<AdvertisementResponseDto>> GetBrowahMarketFeedAsync();
     }
 }

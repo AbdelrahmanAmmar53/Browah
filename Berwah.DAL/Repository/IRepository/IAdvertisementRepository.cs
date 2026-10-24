@@ -15,7 +15,7 @@ namespace Berwah.DAL.Repository.IRepository
         Task<Advertisment?> GetByIdAsync(int id);
         Task<IEnumerable<Advertisment>> GetAllAsync();
         void Update(Advertisment advertisement);
-        void Delete(Advertisment advertisement);
+        Task DeleteAsync(Advertisment advertisement);
         Task<bool> SaveChangesAsync();
 
         Task<AdvertisementSpecification> AddSpecificationAsync(AdvertisementSpecification specification);
@@ -24,5 +24,7 @@ namespace Berwah.DAL.Repository.IRepository
 
         Task<int> GetAdvertisementCountByUserIdAsync(int userId);
         Task<List<Advertisment>> GetRecentByUserIdAsync(int userId, int count);
+
+        Task<IEnumerable<Advertisment>> GetBrowahMarketFeedAsync();
     }
 }
