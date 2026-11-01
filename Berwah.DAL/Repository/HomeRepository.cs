@@ -29,7 +29,12 @@ namespace Berwah.DAL.Repository
                 .Include(a => a.User)
                 .Include(a => a.Category)
                 .AsNoTracking()
-                .OrderByDescending(a => a.CreatedAt)
+                .Where(a => a.Status == AdStatus.Approved)
+
+                .OrderBy(a => a.PromotionPlan == PromotionPlanType.VIP ? 1 :
+                              (a.PromotionPlan.ToString().ToLower() == "feature" || a.PromotionPlan.ToString().ToLower() == "featured") ? 2 : 3)
+
+                .ThenByDescending(a => a.CreatedAt)
                 .Take(count)
                 .ToListAsync();
         }
@@ -45,14 +50,41 @@ namespace Berwah.DAL.Repository
                 .ToListAsync();
         }
 
+      
         public async Task<IEnumerable<Advertisment>> GetFeaturedAdvertisementsAsync()
         {
             return await _context.Advertisements
                 .Include(a => a.AdvertismentImages)
                     .ThenInclude(ai => ai.Image)
+                .Include(a => a.User)
                 .AsNoTracking()
-                .Where(a => a.PromotionPlan.ToString() == "Featured")
+        
+                .Where(a => a.PromotionPlan == PromotionPlanType.Featured || a.PromotionPlan == PromotionPlanType.Free)
                 .OrderByDescending(a => a.CreatedAt)
+                .ToListAsync();
+        }
+
+    
+        public async Task<IEnumerable<User>> GetMerchantsByTypeAsync(string businessType)
+        {
+            return await _context.Users
+                .AsNoTracking()
+                .Where(u => u.UserType == UserType.Merchant &&
+                            u.BusinessType != null &&
+                            u.BusinessType.ToLower().Contains(businessType.ToLower()))
+                .Include(u => u.Images)
+                .ToListAsync();
+        }
+
+
+        public async Task<IEnumerable<User>> GetHomeMadeFoodMerchantsAsync()
+        {
+            return await _context.Users
+                .AsNoTracking()
+                .Where(u => u.UserType == UserType.Merchant &&
+                            u.BusinessType != null &&
+                            (u.BusinessType.ToLower().Contains("homefood") || u.BusinessType.ToLower().Contains("أكل بيتي")))
+                .Include(u => u.Images)
                 .ToListAsync();
         }
         public async Task<IEnumerable<SubCategory>> GetSubCategoriesByMainCategoryNameAsync(string categoryName)
@@ -63,24 +95,6 @@ namespace Berwah.DAL.Repository
                 .Include(sc => sc.Category)
                 .ToListAsync();
         }
-
-        public async Task<IEnumerable<User>> GetMerchantsByTypeAsync(string businessType)
-        {
-            return await _context.Users
-                .AsNoTracking()
-                .Where(u => u.UserType == UserType.Merchant && u.BusinessType != null && u.BusinessType.ToLower() == businessType.ToLower())
-                .Include(u => u.Images)
-                .ToListAsync();
-        }
-        public async Task<IEnumerable<User>> GetHomeMadeFoodMerchantsAsync()
-        {
-            return await _context.Users
-                .AsNoTracking()
-                .Where(u => u.UserType == UserType.Merchant && u.BusinessType != null && u.BusinessType.ToLower() == "homemadefood") 
-                .Include(u => u.Images)
-                .ToListAsync();
-        }
-
 
         public async Task<bool> AddServiceRequestAsync(ServiceRequest serviceRequest)
         {
@@ -116,9 +130,48 @@ namespace Berwah.DAL.Repository
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<Product>> GetRecentlyViewedProductsAsync(string? userId, int count)
+        public async Task<int> GetServiceRequestsCountBySubCategoryIdAsync(int subCategoryId)
         {
-            return new List<Product>();
+            return await _context.ServiceRequests
+                .CountAsync(sr => sr.SubCategoryId == subCategoryId);
         }
+
+        public async Task<int> GetMerchantsCountByBusinessTypeAsync(string businessTypeName)
+        {
+            return await _context.Users
+                .CountAsync(u => u.UserType == UserType.Merchant &&
+                            u.BusinessType != null &&
+                            u.BusinessType.ToLower() == businessTypeName.ToLower());
+        }
+
+        public async Task<int?> GetMerchantIdByBusinessTypeAsync(string businessTypeName)
+        {
+            var merchant = await _context.Users
+                .AsNoTracking()
+                .Where(u => u.UserType == UserType.Merchant &&
+                            u.BusinessType != null &&
+                            u.BusinessType.ToLower() == businessTypeName.ToLower())
+                .OrderByDescending(u => u.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            return merchant?.Id;
+        }
+
+        public async Task<IEnumerable<Advertisment>> GetRecentlyViewedProductsAsync(string? userId, int count)
+        {
+            return new List<Advertisment>();
+        }
+
+        public async Task<ServiceOffer> AddAsync(ServiceOffer offer)
+        {
+            await _context.Set<ServiceOffer>().AddAsync(offer);
+            return offer;
+        }
+
+        public async Task<bool> SaveChangesAsync()
+        {
+            return await _context.SaveChangesAsync() > 0;
+        }
+
     }
 }

@@ -16,7 +16,10 @@ namespace Berwah.Models.DTO
         public string Title { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "القسم الرئيسي مطلوب")]
-        public int CategoryId { get; set; } 
+        public int CategoryId { get; set; }
+
+        [Required(ErrorMessage = "القسم الفرعي مطلوب")]
+        public int SubCategoryId { get; set; }
 
         [Required]
         public ProductCondition Condition { get; set; }

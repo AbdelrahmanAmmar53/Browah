@@ -9,8 +9,10 @@ namespace Berwah.Models.DTO
 {
     public class WebHomeDto : HomeDto
     {
-        public IEnumerable<MerchantCardDto> Restaurants { get; set; } = new List<MerchantCardDto>();
-        public IEnumerable<MerchantCardDto> Grocerys { get; set; } = new List<MerchantCardDto>();
-        public IEnumerable<SubCategoryDto> Services { get; set; } = new List<SubCategoryDto>();
+        public IEnumerable<SubCategoryWithCountDto> Restaurants { get; set; } = new List<SubCategoryWithCountDto>();
+        public IEnumerable<SubCategoryWithCountDto> Grocerys { get; set; } = new List<SubCategoryWithCountDto>();
+        public IEnumerable<SubCategoryWithCountDto> Services { get; set; } = new List<SubCategoryWithCountDto>();
+        public IEnumerable<SubCategoryWithCountDto> HomeFood { get; set; } = new List<SubCategoryWithCountDto>();
+       // public List<WebCategoriesDetailDto> WebCategoriesDetails { get; set; }
     }
 }

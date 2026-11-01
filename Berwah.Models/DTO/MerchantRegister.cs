@@ -13,7 +13,9 @@ namespace Berwah.Models.DTO
         public string BusinessName { get; set; } 
 
         [Required(ErrorMessage = "نوع النشاط مطلوب")]
-        public string BusinessType { get; set; } 
+        public string BusinessType { get; set; }
+        [Required(ErrorMessage = "وصف النشاط مطلوب")]
+        public string TypeOfService { get; set; }
 
         public string? BusinessDescription { get; set; }
 

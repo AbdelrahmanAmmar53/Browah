@@ -35,8 +35,10 @@ namespace Berwah.DAL.App
         public DbSet<SystemSetting> SystemSettings { get; set; }
         public DbSet<VisaCard> VisaCards { get; set; }
         public DbSet<Transaction> Transactions { get; set; }
-
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<ServiceRequest> ServiceRequests { get; set; }
+        public DbSet<ServiceOffer> ServiceOffers { get; set; }
+        public DbSet<MenuSection> menuSections { get; set; }
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
@@ -150,6 +152,23 @@ namespace Berwah.DAL.App
                 .WithMany() 
                 .HasForeignKey(sr => sr.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<Advertisment>()
+               .HasOne(a => a.SubCategory) 
+               .WithMany(sc => sc.Advertisements) 
+               .HasForeignKey(a => a.SubCategoryId)
+               .OnDelete(DeleteBehavior.NoAction);
+
+           builder.Entity<MenuSection>()
+               .HasOne(m => m.Merchant)
+               .WithMany(u => u.MenuSections) 
+               .HasForeignKey(m => m.MerchantId)
+               .OnDelete(DeleteBehavior.Cascade);
+            builder.Entity<Product>()
+        .HasOne(p => p.MenuSection)
+        .WithMany(s => s.Products)
+        .HasForeignKey(p => p.MenuSectionId)
+        .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

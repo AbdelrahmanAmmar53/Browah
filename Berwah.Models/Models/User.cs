@@ -35,6 +35,7 @@ namespace Berwah.Models.Models
         // --- حقول خاصة بالتاجر / المتجر (Merchant / Business) ---
         public string? BusinessName { get; set; }
         public string? BusinessType { get; set; }
+        public string? TypeOfService { get; set; }
         public string? BusinessDescription { get; set; }
         public string? DeliveryTimeSpan { get; set; }
         public decimal? MinimumOrder { get; set; }
@@ -50,8 +51,11 @@ namespace Berwah.Models.Models
         public virtual ICollection<Notification> Notifications { get; set; }
         public virtual ICollection<Order> Orders { get; set; }
         public virtual ICollection<Ticket> Tickets { get; set; }
-        public virtual ICollection<Product> Products { get; set; }
+        public virtual ICollection<Advertisment> Advertisements { get; set; }
+         public virtual ICollection<Product> Products { get; set; }
         public virtual ICollection<VisaCard> VisaCards { get; set; }
         public virtual ICollection<ServiceRequest> ServiceRequests { get; set; }
+        public virtual ICollection<RefreshToken> RefreshTokens { get; set; }
+        public virtual ICollection<MenuSection> MenuSections { get; set; }
     }
 }

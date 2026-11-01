@@ -5,6 +5,7 @@ using Berwah.Models.DTO.Merchant;
 using Berwah.Models.DTO.Service;
 using Berwah.Models.Enum;
 using Berwah.Models.Models;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -68,21 +69,31 @@ using System.Threading.Tasks;
                     ImageUrl = a.AdvertismentImages?.FirstOrDefault()?.Image?.Url
                 }).ToList(),
 
-                LatestProducts = latestAds.Select(a => new ProductCardDto
+                LatestProducts = latestAds.Select(a => new AdvertisementCardDto
                 {
                     Id = a.Id,
-                    Name = a.Title,
+                    Title = a.Title,
+                    Description = a.Description,
                     Price = a.Price,
+                    Governorate = a.Governorate,
+                    City = a.City,
+                    ProductType = a.Condition.ToString(),
+                    PromotionPlan = a.PromotionPlan.ToString(),
                     ImageUrl = a.AdvertismentImages?.FirstOrDefault()?.Image?.Url,
                     SellerName = a.User?.FirstName
                 }).ToList(),
 
-                RecentlyViewedProducts = recentlyViewedProducts.Select(p => new ProductCardDto
+                RecentlyViewedProducts = recentlyViewedProducts.Select(p => new AdvertisementCardDto
                 {
                     Id = p.Id,
-                    Name = p.Name,
+                    Title = p.Title,
+                    Description = p.Description,
                     Price = p.Price,
-                    ImageUrl = p.Image?.Url,
+                    Governorate = p.Governorate,
+                    City = p.City,
+                    ProductType = p.Condition.ToString(),
+                    PromotionPlan = p.PromotionPlan.ToString(),
+                    ImageUrl = p.AdvertismentImages?.FirstOrDefault()?.Image?.Url,
                     SellerName = p.User?.FirstName
                 }).ToList()
             };
@@ -96,14 +107,70 @@ using System.Threading.Tasks;
             var featuredAds = await _homeRepository.GetFeaturedAdvertisementsAsync();
             var recentlyViewedProducts = await _homeRepository.GetRecentlyViewedProductsAsync(userId, 10);
 
+            var restaurantSubs = new List<SubCategoryWithCountDto>();
+            var grocerySubs = new List<SubCategoryWithCountDto>();
+            var servicesSubs = new List<SubCategoryWithCountDto>();
+            var homeFoodSubs = new List<SubCategoryWithCountDto>();
 
-            var restaurantMerchants = await _homeRepository.GetMerchantsByTypeAsync("Restaurant");
-            var groceryMerchants = await _homeRepository.GetMerchantsByTypeAsync("Grocery");
+            
+            foreach (var cat in mainCategories)
+            {
+                if (cat.CategoryType == CategoryType.Restaurant ||
+                    cat.CategoryType == CategoryType.Grocery ||
+                    cat.CategoryType == CategoryType.HomeFood ||
+                    cat.CategoryType == CategoryType.Services ||
+                    cat.Name.Contains("اكل بيتي") || cat.Name.Contains("أكل بيتي"))
+                {
+                    var subs = await _homeRepository.GetSubCategoriesByMainCategoryNameAsync(cat.Name);
+                    var subCategoriesWithCounts = new List<SubCategoryWithCountDto>();
 
-            var serviceSubs = await _homeRepository.GetSubCategoriesByMainCategoryNameAsync("خدمات");
+                    foreach (var sub in subs)
+                    {
+                        int availableCount = 0;
+                        if (cat.CategoryType == CategoryType.Services)
+                        {
+                            availableCount = await _homeRepository.GetServiceRequestsCountBySubCategoryIdAsync(sub.Id);
+                        }
+                        else
+                        {
+                            availableCount = await _homeRepository.GetMerchantsCountByBusinessTypeAsync(sub.Name);
+                        }
+
+                        subCategoriesWithCounts.Add(new SubCategoryWithCountDto
+                        {
+                            SubCategoryId = sub.Id,
+                            SubCategoryName = sub.Name,
+                            Count = availableCount
+                        });
+                    }
+
+                    
+                    if (cat.CategoryType == CategoryType.Restaurant || cat.Name.Contains("مطاعم"))
+                    {
+                        restaurantSubs = subCategoriesWithCounts;
+                    }
+                    else if (cat.CategoryType == CategoryType.Grocery || cat.Name.Contains("البقالة"))
+                    {
+                        grocerySubs = subCategoriesWithCounts;
+                    }
+                    else if (cat.CategoryType == CategoryType.Services || cat.Name.Contains("خدمات"))
+                    {
+                        servicesSubs = subCategoriesWithCounts;
+                    }
+                    else if (cat.CategoryType == CategoryType.HomeFood || cat.Name.Contains("اكل بيتي") || cat.Name.Contains("أكل بيتي"))
+                    {
+                        homeFoodSubs = subCategoriesWithCounts;
+                    }
+                }
+            }
 
             return new WebHomeDto
             {
+                Restaurants = restaurantSubs,
+                Grocerys = grocerySubs,
+                Services = servicesSubs,
+                HomeFood = homeFoodSubs,
+
                 Categories = mainCategories.Select(c => new CategorySummaryDto
                 {
                     Id = c.Id,
@@ -118,6 +185,7 @@ using System.Threading.Tasks;
                     ImageUrl = a.AdvertismentImages?.FirstOrDefault()?.Image?.Url
                 }).ToList(),
 
+                // إعلانات الـ Feature
                 Advertisements = featuredAds.Select(a => new AdvertisementCardDto
                 {
                     Id = a.Id,
@@ -126,65 +194,24 @@ using System.Threading.Tasks;
                     ImageUrl = a.AdvertismentImages?.FirstOrDefault()?.Image?.Url
                 }).ToList(),
 
-                LatestProducts = latestAds.Select(a => new ProductCardDto
+                LatestProducts = latestAds.Select(a => new AdvertisementCardDto
                 {
                     Id = a.Id,
-                    Name = a.Title,
+                    Title = a.Title,
                     Price = a.Price,
                     ImageUrl = a.AdvertismentImages?.FirstOrDefault()?.Image?.Url,
                     SellerName = a.User?.FirstName
                 }).ToList(),
 
-                RecentlyViewedProducts = recentlyViewedProducts.Select(p => new ProductCardDto
+                RecentlyViewedProducts = recentlyViewedProducts.Select(p => new AdvertisementCardDto
                 {
                     Id = p.Id,
-                    Name = p.Name,
+                    Title = p.Title,
                     Price = p.Price,
-                    ImageUrl = p.Image?.Url,
+                    ImageUrl = p.AdvertismentImages?.FirstOrDefault()?.Image?.Url,
                     SellerName = p.User?.FirstName
-                }).ToList(),
-
-                Restaurants = restaurantMerchants.Select(m => new MerchantCardDto
-                {
-                    Id = m.Id,
-                    BusinessName = m.BusinessName ?? $"{m.FirstName} {m.LastName}",
-                    BusinessDescription = m.BusinessDescription ?? "",
-                    BusinessType = m.BusinessType,
-                    MerchantImageUrl = m.Images?.FirstOrDefault()?.Url ?? "",
-                    IsOpen = m.AcceptOrdersAutomatically
-                }).ToList(),
-
-                Grocerys = groceryMerchants.Select(m => new MerchantCardDto
-                {
-                    Id = m.Id,
-                    BusinessName = m.BusinessName ?? $"{m.FirstName} {m.LastName}",
-                    BusinessDescription = m.BusinessDescription ?? "",
-                    BusinessType = m.BusinessType,
-                    MerchantImageUrl = m.Images?.FirstOrDefault()?.Url ?? "",
-                    IsOpen = m.AcceptOrdersAutomatically
-                }).ToList(),
-
-                Services = serviceSubs.Select(s => new SubCategoryDto
-                {
-                    Id = s.Id,
-                    Name = s.Name,
-                    ImageUrl = ""
                 }).ToList()
             };
-        }
-        public async Task<IEnumerable<MerchantCardDto>> GetHomeMadeFoodAsync()
-        {
-            var merchants = await _homeRepository.GetHomeMadeFoodMerchantsAsync();
-
-            return merchants.Select(m => new MerchantCardDto
-            {
-                Id = m.Id,
-                BusinessName = m.BusinessName ?? $"{m.FirstName} {m.LastName}",
-                BusinessDescription = m.BusinessDescription ?? "",
-                BusinessType = m.BusinessType,
-                MerchantImageUrl = m.Images?.FirstOrDefault()?.Url ?? "",
-                IsOpen = m.AcceptOrdersAutomatically
-            }).ToList();
         }
 
         public async Task<IEnumerable<SubCategoryDto>> GetServicesPageDataAsync()
@@ -267,6 +294,48 @@ using System.Threading.Tasks;
                 AttachmentUrl = r.AttachmentUrl,
                 TimeAgo = GetTimeAgo(r.CreatedAt)
             }).ToList();
+        }
+
+        public async Task<ServiceOfferResponseDto> SubmitOfferAsync(CreateServiceOfferDto dto, int providerId)
+        {
+            string? attachmentUrl = null;
+
+            if (dto.Attachment != null && dto.Attachment.Length > 0)
+            {
+                var uploadResult = await _imageService.UploadImageAsync(dto.Attachment);
+                attachmentUrl = uploadResult.Url.ToString();
+            }
+
+            var offer = new ServiceOffer
+            {
+                ServiceRequestId = dto.ServiceRequestId,
+                ProviderId = providerId,
+                Price = dto.Price,
+                Description = dto.Description,
+                ExecutionPeriod = dto.ExecutionPeriod,
+                AttachmentUrl = attachmentUrl,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _homeRepository.AddAsync(offer);
+            await _homeRepository.SaveChangesAsync();
+
+            return MapToOfferResponseDto(offer);
+        }
+
+        private ServiceOfferResponseDto MapToOfferResponseDto(ServiceOffer offer)
+        {
+            return new ServiceOfferResponseDto
+            {
+                Id = offer.Id,
+                ServiceRequestId = offer.ServiceRequestId,
+                ProviderId = offer.ProviderId,
+                Price = offer.Price,
+                Description = offer.Description,
+                ExecutionPeriod = offer.ExecutionPeriod,
+                AttachmentUrl = offer.AttachmentUrl,
+                CreatedAt = offer.CreatedAt
+            };
         }
         private string GetTimeAgo(DateTime createdAt)
         {

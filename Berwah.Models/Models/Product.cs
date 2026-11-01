@@ -29,6 +29,9 @@ namespace Berwah.Models.Models
         [Range(0, int.MaxValue, ErrorMessage = "Stock must be a non-negative integer.")]
         public int Stock { get; set; }
         public string Currency { get; set; } = "EGP";
+        public bool IsAvailableForInstantOrder { get; set; } 
+        public bool IsSpecialOffer { get; set; }             
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public string Location { get; set; }
         public bool IsActive { get; set; } = true;
@@ -40,10 +43,8 @@ namespace Berwah.Models.Models
         public string? ImageUrl { get; set; }
         public int UserId { get; set; }
         public User User { get; set; }
-        public int CategoryId { get; set; }
-        public Category Category { get; set; }
-        public int? SubCategoryId { get; set; }
-        public SubCategory? SubCategory { get; set; }
+        public int MenuSectionId { get; set; }
+        public MenuSection MenuSection { get; set; }
         [JsonIgnore]
         public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 

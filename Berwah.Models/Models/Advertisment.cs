@@ -14,6 +14,7 @@ namespace Berwah.Models.Models
 
         public string Description { get; set; } = string.Empty;
 
+        public AdStatus Status { get; set; } = AdStatus.Pending;
         [Column(TypeName = "decimal(18,2)")]
         public decimal Price { get; set; }
 
@@ -30,6 +31,9 @@ namespace Berwah.Models.Models
 
         public int CategoryId { get; set; }
         public Category? Category { get; set; }
+
+        public int SubCategoryId { get; set; }
+        public SubCategory? SubCategory { get; set; }
 
         public bool IsActive { get; set; }
 

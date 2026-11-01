@@ -11,7 +11,7 @@ namespace Berwah.Models.DTO
         public List<AdvertisementCardDto> Banners { get; set; } = new();
         public List<CategorySummaryDto> Categories { get; set; } = new();
         public List<AdvertisementCardDto> Advertisements { get; set; } = new();
-        public List<ProductCardDto> RecentlyViewedProducts { get; set; } = new();
-        public List<ProductCardDto> LatestProducts { get; set; } = new();
+        public List<AdvertisementCardDto> RecentlyViewedProducts { get; set; } = new();
+        public List<AdvertisementCardDto> LatestProducts { get; set; } = new();
     }
 }

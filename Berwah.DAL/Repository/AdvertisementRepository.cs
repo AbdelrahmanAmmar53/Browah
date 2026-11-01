@@ -172,6 +172,58 @@ namespace Berwah.DAL.Repository
                 .OrderByDescending(a => a.CreatedAt)
                 .ToListAsync();
         }
+
+        // أضف هذه الدوال داخل AdvertisementRepository.cs
+
+        public async Task<IEnumerable<Advertisment>> GetAdminAdvertisementsAsync(int page, int pageSize)
+        {
+            return await _context.Advertisements
+                .Include(a => a.User)
+                    .ThenInclude(u => u.UserRole)
+                        .ThenInclude(ur => ur.Role)
+                .Include(a => a.AdvertismentImages)
+                    .ThenInclude(ai => ai.Image)
+                .Include(a => a.Specifications)
+                // فلترة إعلانات الأدمن بناءً على منطق سوق برواح لديك
+                .Where(a => a.User.UserName == "browah" || a.User.UserRole.Any(ur => ur.Role.Name == "Admin"))
+                .OrderByDescending(a => a.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Advertisment>> GetBySubCategoryIdsAsync(List<int> subCategoryIds, int page, int pageSize)
+        {
+            return await _context.Advertisements
+                .Include(a => a.User)
+                .Include(a => a.Category)
+                .Include(a => a.AdvertismentImages)
+                    .ThenInclude(ai => ai.Image)
+                .Include(a => a.Specifications)
+                .Where(a => subCategoryIds.Contains(a.SubCategoryId))
+                .OrderByDescending(a => a.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Advertisment>> GetByCategoryIdAsync(int categoryId, int page, int pageSize)
+        {
+            return await _context.Advertisements
+                .Include(a => a.User)
+                .Include(a => a.Category)
+                .Include(a => a.AdvertismentImages)
+                    .ThenInclude(ai => ai.Image)
+                .Include(a => a.Specifications)
+                .Where(a => a.CategoryId == categoryId)
+                .OrderByDescending(a => a.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .AsNoTracking()
+                .ToListAsync();
+        }
     }
 }
 

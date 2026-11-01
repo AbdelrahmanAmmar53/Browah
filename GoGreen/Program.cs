@@ -40,6 +40,8 @@ builder.Services.AddScoped<IHomeService, HomeService>();
 builder.Services.AddScoped<IAdvertismentService, AdvertisementService>();
 builder.Services.AddScoped<IAdvertisementDetailService, AdvertisementDetailService>();
 builder.Services.AddScoped<IMerchantService, MerchantService>();
+builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<ISupervisorForAdService, SupervisorForAdService>();
 
 
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
@@ -49,6 +51,8 @@ builder.Services.AddScoped<IHomeRepository, HomeRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IAdvertisementRepository, AdvertisementRepository>();
 builder.Services.AddScoped<IMerchantRepository, MerchantRepository>();
+builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<ISupervisorForAdRepository, SupervisorForAdRepository>();
 
 
 builder.Services.AddSignalR();

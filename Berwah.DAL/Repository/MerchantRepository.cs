@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace Berwah.DAL.Repository
 {
-    public class MerchantRepository: IMerchantRepository
+    public class MerchantRepository : IMerchantRepository
     {
         private readonly ApplicationDbContext _context;
         public MerchantRepository(ApplicationDbContext context)
@@ -58,13 +58,12 @@ namespace Berwah.DAL.Repository
 
         public async Task RecordMerchantPenaltyTransactionAsync(int merchantId, decimal penaltyAmount, string reason)
         {
-            
             var transaction = new Transaction
             {
                 UserId = merchantId,
-                Amount = -penaltyAmount, 
-                Type = "Penalty",        
-                Description = reason,    
+                Amount = -penaltyAmount,
+                Type = "Penalty",
+                Description = reason,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -80,10 +79,49 @@ namespace Berwah.DAL.Repository
                 .Include(u => u.Images)
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<User>> GetMerchantsByCategoryIdAsync(int categoryId)
+        {
+            return await _context.Users
+                .AsNoTracking()
+                .Where(u => u.UserType == UserType.Merchant)
+                .Include(u => u.Images)
+                .ToListAsync();
+        }
+
         public async Task<int> GetActiveProductsCountAsync(int merchantId)
         {
             return await _context.Products.CountAsync(p => p.UserId == merchantId && p.IsActive);
         }
+
+        // 🟢 الإضافات الجديدة لتغطية كل دوال الـ Interface الخاصة بأقسام المنيو:
+
+        public async Task<IEnumerable<MenuSection>> GetMerchantMenuSectionsAsync(int merchantId)
+        {
+            return await _context.menuSections
+                .Include(s => s.Products)
+                .Where(s => s.MerchantId == merchantId)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<bool> AddMenuSectionAsync(MenuSection section)
+        {
+            await _context.menuSections.AddAsync(section);
+            return await _context.SaveChangesAsync() > 0;
+        }
+
+        public async Task<IEnumerable<Product>> GetProductsByMenuSectionAsync(int menuSectionId)
+        {
+            return await _context.Products
+                .Where(p => p.MenuSectionId == menuSectionId)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<MenuSection?> GetMenuSectionByIdAsync(int menuSectionId)
+        {
+            return await _context.menuSections.FindAsync(menuSectionId);
+        }
     }
 }
-

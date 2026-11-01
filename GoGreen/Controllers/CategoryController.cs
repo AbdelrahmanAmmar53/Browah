@@ -1,4 +1,6 @@
-﻿using Berwah.DAL.App;
+﻿using Berwah.BL.Service;
+using Berwah.BL.Service.IService;
+using Berwah.DAL.App;
 using Berwah.Models.DTO;
 using Berwah.Models.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -13,10 +15,12 @@ namespace Berwah.Controllers
     public class CategoryController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ICategoryService _categoryService;
 
-        public CategoryController(ApplicationDbContext context)
+        public CategoryController(ApplicationDbContext context, ICategoryService categoryService)
         {
             _context = context;
+            _categoryService = categoryService;
         }
 
         [HttpGet]
@@ -155,16 +159,56 @@ namespace Berwah.Controllers
             if (subCategory == null)
                 return NotFound(new { status = "fail", message = "القسم الفرعي غير موجود" });
 
-            var hasProducts = await _context.Products.AnyAsync(p => p.SubCategoryId == id);
-            if (hasProducts)
-            {
-                return BadRequest(new { status = "fail", message = "لا يمكن حذف قسم فرعي توجد منتجات مرتبطة به" });
-            }
+            //var hasProducts = await _context.Products.AnyAsync(p => p.SubCategoryId == id);
+            //if (hasProducts)
+            //{
+            //    return BadRequest(new { status = "fail", message = "لا يمكن حذف قسم فرعي توجد منتجات مرتبطة به" });
+            //}
 
             _context.SubCategories.Remove(subCategory);
             await _context.SaveChangesAsync();
 
             return Ok(new { status = "success", message = "تم حذف القسم الفرعي بنجاح" });
+        }
+
+
+        [HttpGet("{id}/content")]
+        public async Task<IActionResult> GetCategoryContent(int id, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        {
+            var result = await _categoryService.GetCategoryContentAsync(id, page, pageSize);
+            if (result == null)
+            {
+                return NotFound(new { status = "fail", message = "القسم غير موجود" });
+            }
+
+            return Ok(new
+            {
+                status = "success",
+                data = result
+            });
+        }
+
+        [HttpGet("{categoryId}/filter")]
+        public async Task<IActionResult> FilterCategoryContent(
+                int categoryId,
+    [FromQuery] int? subCategoryId,
+    [FromQuery] string? condition, 
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var result = await _categoryService.GetFilteredAdsAsync(categoryId, subCategoryId, condition, page, pageSize);
+                return Ok(new
+                {
+                    status = "success",
+                    data = result
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
         }
     }
 }

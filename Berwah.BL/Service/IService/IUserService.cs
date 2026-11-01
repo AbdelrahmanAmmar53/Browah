@@ -10,5 +10,6 @@ namespace Berwah.BL.Service.IService
     {
         string GenerateAndSaveOtp(string key, object registerModel, string userType);
         bool VerifyOtp(string key, string code, out object? registerModel, out string? userType);
+        Task<byte[]> ExportUserDataAsExcelAsync(int userId);
     }
 }

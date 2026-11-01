@@ -14,7 +14,7 @@ namespace Berwah.Models.Models
         public string Name { get; set; }
         //public string IconUrl { get; set; }
         public CategoryType CategoryType { get; set; }
-        public ICollection<Product> Products { get; set; } = new List<Product>();
+       // public ICollection<Product> Products { get; set; } = new List<Product>();
         public ICollection<SubCategory> SubCategories { get; set; } = new List<SubCategory>();
         public ICollection<Advertisment> Advertisments { get; set; } = new List<Advertisment>();
     }

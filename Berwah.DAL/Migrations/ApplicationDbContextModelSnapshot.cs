@@ -141,6 +141,12 @@ namespace Berwah.DAL.Migrations
                     b.Property<int>("PromotionPlan")
                         .HasColumnType("int");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SubCategoryId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -152,6 +158,8 @@ namespace Berwah.DAL.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("SubCategoryId");
 
                     b.HasIndex("UserId");
 
@@ -244,6 +252,28 @@ namespace Berwah.DAL.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Images");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.MenuSection", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("MerchantId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MerchantId");
+
+                    b.ToTable("menuSections");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.Notification", b =>
@@ -385,9 +415,6 @@ namespace Berwah.DAL.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("CategoryId")
-                        .HasColumnType("int");
-
                     b.Property<decimal>("CommissionAmount")
                         .HasColumnType("decimal(18,2)");
 
@@ -417,9 +444,18 @@ namespace Berwah.DAL.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsAvailableForInstantOrder")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSpecialOffer")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Location")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("MenuSectionId")
+                        .HasColumnType("int");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -442,9 +478,9 @@ namespace Berwah.DAL.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CategoryId");
-
                     b.HasIndex("ImageId");
+
+                    b.HasIndex("MenuSectionId");
 
                     b.HasIndex("SubCategoryId");
 
@@ -478,6 +514,37 @@ namespace Berwah.DAL.Migrations
                     b.ToTable("RecentlyViewedProducts");
                 });
 
+            modelBuilder.Entity("Berwah.Models.Models.RefreshToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("Created")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("Expires")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("Revoked")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("RefreshTokens");
+                });
+
             modelBuilder.Entity("Berwah.Models.Models.Role", b =>
                 {
                     b.Property<int>("Id")
@@ -507,6 +574,46 @@ namespace Berwah.DAL.Migrations
                         .HasFilter("[NormalizedName] IS NOT NULL");
 
                     b.ToTable("AspNetRoles", (string)null);
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.ServiceOffer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AttachmentUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ExecutionPeriod")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ProviderId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ServiceRequestId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderId");
+
+                    b.HasIndex("ServiceRequestId");
+
+                    b.ToTable("ServiceOffers");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.ServiceRequest", b =>
@@ -834,6 +941,9 @@ namespace Berwah.DAL.Migrations
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
 
+                    b.Property<string>("TypeOfService")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -1049,13 +1159,21 @@ namespace Berwah.DAL.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Berwah.Models.Models.SubCategory", "SubCategory")
+                        .WithMany("Advertisements")
+                        .HasForeignKey("SubCategoryId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
                     b.HasOne("Berwah.Models.Models.User", "User")
-                        .WithMany()
+                        .WithMany("Advertisements")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Category");
+
+                    b.Navigation("SubCategory");
 
                     b.Navigation("User");
                 });
@@ -1088,6 +1206,17 @@ namespace Berwah.DAL.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.MenuSection", b =>
+                {
+                    b.HasOne("Berwah.Models.Models.User", "Merchant")
+                        .WithMany("MenuSections")
+                        .HasForeignKey("MerchantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Merchant");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.Notification", b =>
@@ -1140,17 +1269,17 @@ namespace Berwah.DAL.Migrations
 
             modelBuilder.Entity("Berwah.Models.Models.Product", b =>
                 {
-                    b.HasOne("Berwah.Models.Models.Category", "Category")
-                        .WithMany("Products")
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Berwah.Models.Models.Image", "Image")
                         .WithMany()
                         .HasForeignKey("ImageId");
 
-                    b.HasOne("Berwah.Models.Models.SubCategory", "SubCategory")
+                    b.HasOne("Berwah.Models.Models.MenuSection", "MenuSection")
+                        .WithMany("Products")
+                        .HasForeignKey("MenuSectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Berwah.Models.Models.SubCategory", null)
                         .WithMany("Products")
                         .HasForeignKey("SubCategoryId");
 
@@ -1160,11 +1289,9 @@ namespace Berwah.DAL.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Category");
-
                     b.Navigation("Image");
 
-                    b.Navigation("SubCategory");
+                    b.Navigation("MenuSection");
 
                     b.Navigation("User");
                 });
@@ -1178,6 +1305,36 @@ namespace Berwah.DAL.Migrations
                         .IsRequired();
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.RefreshToken", b =>
+                {
+                    b.HasOne("Berwah.Models.Models.User", "User")
+                        .WithMany("RefreshTokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.ServiceOffer", b =>
+                {
+                    b.HasOne("Berwah.Models.Models.User", "Provider")
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Berwah.Models.Models.ServiceRequest", "ServiceRequest")
+                        .WithMany()
+                        .HasForeignKey("ServiceRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Provider");
+
+                    b.Navigation("ServiceRequest");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.ServiceRequest", b =>
@@ -1313,14 +1470,17 @@ namespace Berwah.DAL.Migrations
                 {
                     b.Navigation("Advertisments");
 
-                    b.Navigation("Products");
-
                     b.Navigation("SubCategories");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.Image", b =>
                 {
                     b.Navigation("AdvertismentImages");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.MenuSection", b =>
+                {
+                    b.Navigation("Products");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.Order", b =>
@@ -1340,18 +1500,26 @@ namespace Berwah.DAL.Migrations
 
             modelBuilder.Entity("Berwah.Models.Models.SubCategory", b =>
                 {
+                    b.Navigation("Advertisements");
+
                     b.Navigation("Products");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.User", b =>
                 {
+                    b.Navigation("Advertisements");
+
                     b.Navigation("Images");
+
+                    b.Navigation("MenuSections");
 
                     b.Navigation("Notifications");
 
                     b.Navigation("Orders");
 
                     b.Navigation("Products");
+
+                    b.Navigation("RefreshTokens");
 
                     b.Navigation("ServiceRequests");
 

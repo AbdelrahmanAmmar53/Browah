@@ -11,6 +11,7 @@ namespace Berwah.Models.Enum
         Standard = 1,
         Restaurant = 2,
         Grocery = 3,
-        Services = 4
+        Services = 4,
+        HomeFood = 5
     }
 }

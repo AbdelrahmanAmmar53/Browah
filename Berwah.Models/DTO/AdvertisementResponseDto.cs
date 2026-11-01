@@ -15,10 +15,13 @@ namespace Berwah.Models.DTO
         public string Condition { get; set; } = string.Empty;
         public string Governorate { get; set; } = string.Empty;
         public string City { get; set; } = string.Empty;
+        public int CategoryId { get; set; }
+        public int SubCategoryId { get; set; }
         public string Description { get; set; } = string.Empty;
         public string PromotionPlan { get; set; } = string.Empty;
         public List<string> ImageUrls { get; set; } = new();
         public DateTime CreatedAt { get; set; }
+        public int SellerId { get; set; }
         public List<SpecificationItemDto> Specifications { get; set; } = new();
     }
 }

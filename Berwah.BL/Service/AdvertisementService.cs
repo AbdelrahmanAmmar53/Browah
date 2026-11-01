@@ -1,6 +1,7 @@
 ﻿using Berwah.BL.Service.IService;
 using Berwah.DAL.Repository.IRepository;
 using Berwah.Models.DTO;
+using Berwah.Models.Enum;
 using Berwah.Models.Models;
 using System;
 using System.Collections.Generic;
@@ -33,7 +34,9 @@ namespace Berwah.BL.Service
                 Condition = dto.Condition,
                 Governorate = dto.Governorate,
                 City = dto.City,
+                Status = AdStatus.Pending,
                 CategoryId = dto.CategoryId,
+                SubCategoryId = dto.SubCategoryId,
                 PromotionPlan = dto.PromotionPlan,
                 UserId = userId,
                 CreatedAt = DateTime.UtcNow,
@@ -139,8 +142,11 @@ namespace Berwah.BL.Service
                 Price = ad.Price,
                 IsNegotiable = ad.IsNegotiable,
                 Condition = ad.Condition.ToString(),
+                SellerId= ad.UserId,
                 Governorate = ad.Governorate,
                 City = ad.City,
+                CategoryId = ad.CategoryId,
+                SubCategoryId = ad.SubCategoryId,
                 PromotionPlan = ad.PromotionPlan.ToString(),
                 ImageUrls = ad.AdvertismentImages.Select(ai => ai.Image!.Url).ToList(),
 

@@ -11,6 +11,8 @@ namespace Berwah.Models.DTO
         public string City { get; set; } = string.Empty;
         public string Governorate { get; set; } = string.Empty;
         public string PromotionPlan { get; set; } = string.Empty;
+        public string SellerName { get; set; } = string.Empty;  
+        public int SellerId { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 }

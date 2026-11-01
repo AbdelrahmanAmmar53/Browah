@@ -66,5 +66,20 @@ namespace Berwah.BL.Service
                 Answer = f.Answer
             });
         }
+        public async Task<Models.DTO.Faq> CreateFaqAsync(CreateFaqDto faq)
+        {
+            var newFaq = new Berwah.Models.Models.Faq
+            {
+                Question = faq.Question,
+                Answer = faq.Answer
+            };
+            await _supportRepo.CreateFaqAsync(newFaq);
+            return new Models.DTO.Faq
+            {
+                //Id = newFaq.Id,
+                Question = newFaq.Question,
+                Answer = newFaq.Answer
+            };
+        }
     }
 }

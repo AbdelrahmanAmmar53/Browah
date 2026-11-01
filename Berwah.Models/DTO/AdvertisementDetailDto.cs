@@ -12,7 +12,10 @@ namespace Berwah.Models.DTO
         // الفئة
         public int CategoryId { get; set; }
         public string CategoryName { get; set; } = string.Empty;
-        
+
+        public int SubCategoryId { get; set; }
+        public string SubCategoryName { get; set; } = string.Empty;
+
         // معلومات البائع
         public int UserId { get; set; }
         public string SellerName { get; set; } = string.Empty;

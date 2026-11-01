@@ -15,11 +15,22 @@ namespace Berwah.DAL.Repository.IRepository
         Task<IEnumerable<Advertisment>> GetVipAdvertisementsAsync();
         Task<IEnumerable<Advertisment>> GetFeaturedAdvertisementsAsync();
         Task<IEnumerable<User>> GetMerchantsByTypeAsync(string businessType);
-        Task<IEnumerable<Product>> GetRecentlyViewedProductsAsync(string userId,int count);
+        Task<IEnumerable<Advertisment>> GetRecentlyViewedProductsAsync(string userId,int count);
         Task<IEnumerable<User>> GetHomeMadeFoodMerchantsAsync();
         Task<bool> AddServiceRequestAsync(ServiceRequest serviceRequest);
         Task<IEnumerable<ServiceRequest>> GetAvailableServiceRequestsAsync(int? subCategoryId);
         Task<IEnumerable<ServiceRequest>> GetAllServiceRequestsAsync();
-        //Task<IEnumerable<Advertisment>> GetTopAdvertisementsAsync(int count);
+
+        Task<int> GetServiceRequestsCountBySubCategoryIdAsync(int subCategoryId);
+        Task<int> GetMerchantsCountByBusinessTypeAsync(string businessTypeName);
+        
+        /// <summary>
+        /// الحصول على معرف التاجر الرئيسي لنوع عمل معين
+        /// يُستخدم لإرسال MerchantId مع قائمة الفئات الفرعية للموبايل
+        /// </summary>
+        Task<int?> GetMerchantIdByBusinessTypeAsync(string businessTypeName);
+        
+        Task<ServiceOffer> AddAsync(ServiceOffer offer);
+        Task<bool> SaveChangesAsync();
     }
 }

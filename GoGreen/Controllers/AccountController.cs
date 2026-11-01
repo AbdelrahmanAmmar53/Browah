@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using ThanyaProject.Services;
 
 namespace Berwah.Controllers
@@ -359,6 +360,7 @@ namespace Berwah.Controllers
 
                     user.BusinessName = merchantDto.BusinessName?.Trim();
                     user.BusinessType = merchantDto.BusinessType?.Trim();
+                    user.TypeOfService = merchantDto.TypeOfService?.Trim();
                     user.BusinessDescription = merchantDto.BusinessDescription?.Trim();
                     user.DeliveryTimeSpan = merchantDto.DeliveryTimeSpan?.Trim();
                     user.MinimumOrder = merchantDto.MinimumOrder;
@@ -466,11 +468,22 @@ namespace Berwah.Controllers
 
                 var token = _jwtService.CreateToken(user, new[] { userTypeStr });
 
+                var refreshToken = new RefreshToken
+                {
+                    Token = GenerateRefreshToken(),
+                    Expires = DateTime.UtcNow.AddDays(7), 
+                    UserId = user.Id
+                };
+
+                await _context.RefreshTokens.AddAsync(refreshToken);
+                await _context.SaveChangesAsync();
+
                 return Ok(new
                 {
                     status = "success",
                     message = "تم إنشاء الحساب بنجاح",
                     token = token,
+                    refreshToken = refreshToken.Token, 
                     data = new
                     {
                         userId = user.Id,
@@ -485,8 +498,57 @@ namespace Berwah.Controllers
                 return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء التحقق", details = ex.Message });
             }
         }
-
+        
         #endregion
+
+        [HttpPost("RefreshToken")]
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequestDto model)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(model.Token) || string.IsNullOrEmpty(model.RefreshToken))
+                    return BadRequest(new { status = "error", message = "البيانات المدخلة غير صحيحة" });
+
+                var storedRefreshToken = await _context.RefreshTokens
+                    .Include(rt => rt.User)
+                    .ThenInclude(u => u.UserRole)
+                    .ThenInclude(ur => ur.Role)
+                    .FirstOrDefaultAsync(rt => rt.Token == model.RefreshToken);
+
+                if (storedRefreshToken == null || !storedRefreshToken.IsActive)
+                    return Unauthorized(new { status = "error", message = "جلسة العمل منتهية، يرجى تسجيل الدخول من جديد" });
+
+                var user = storedRefreshToken.User;
+
+                var roles = await _userManager.GetRolesAsync(user);
+
+                var newAccessToken = _jwtService.CreateToken(user, roles);
+
+                storedRefreshToken.Revoked = DateTime.UtcNow;
+
+                var newRefreshToken = new RefreshToken
+                {
+                    Token = GenerateRefreshToken(),
+                    Expires = DateTime.UtcNow.AddDays(7),
+                    UserId = user.Id
+                };
+
+                await _context.RefreshTokens.AddAsync(newRefreshToken);
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    status = "success",
+                    message = "تم تجديد الـ Token بنجاح",
+                    token = newAccessToken,
+                    refreshToken = newRefreshToken.Token
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء تجديد الـ Token", details = ex.Message });
+            }
+        }
 
         #region Login & Logout
 
@@ -515,11 +577,22 @@ namespace Berwah.Controllers
                 var roles = await _userManager.GetRolesAsync(user);
                 var token = _jwtService.CreateToken(user, roles);
 
+                var refreshToken = new RefreshToken
+                {
+                    Token = GenerateRefreshToken(),
+                    Expires = DateTime.UtcNow.AddDays(7), 
+                    UserId = user.Id
+                };
+
+                await _context.RefreshTokens.AddAsync(refreshToken);
+                await _context.SaveChangesAsync();
+
                 return Ok(new
                 {
                     status = "success",
                     message = "تم تسجيل الدخول بنجاح",
                     token = token,
+                    refreshToken = refreshToken.Token, 
                     data = new
                     {
                         userId = user.Id,
@@ -856,12 +929,29 @@ namespace Berwah.Controllers
             var user = await _userManager.FindByIdAsync(userId!);
             if (user == null) return NotFound();
 
-            // يمكنك تنفيذ Soft Delete أو DeleteAsync
+
             var result = await _userManager.DeleteAsync(user);
             if (!result.Succeeded)
                 return BadRequest(new { status = "error", message = "فشل حذف الحساب" });
 
             return Ok(new { status = "success", message = "تم حذف الحساب نهائياً" });
+        }
+
+        [Authorize]
+        [HttpGet("export-data")]
+        public async Task<IActionResult> ExportUserData()
+        {
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            {
+                return Unauthorized(new { status = "fail", message = "غير مصرح لك بالوصول" });
+            }
+
+            var fileBytes = await _userService.ExportUserDataAsExcelAsync(userId);
+
+            var fileName = $"UserData_Archive_{userId}_{DateTime.UtcNow:yyyyMMdd}.xlsx";
+
+            return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
         }
 
         #endregion
@@ -998,7 +1088,7 @@ namespace Berwah.Controllers
             }
         }
         #endregion
-
+        #region Private Helper Methods
         private string GetTimeAgo(DateTime date)
         {
             var span = DateTime.UtcNow - date;
@@ -1006,6 +1096,15 @@ namespace Berwah.Controllers
             if (span.Days > 0) return $"قبل {span.Days} أيام";
             return "اليوم";
         }
+
+        private string GenerateRefreshToken()
+        {
+            var randomNumber = new byte[32];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomNumber);
+            return Convert.ToBase64String(randomNumber);
+        }
+        #endregion
     }
 }
    

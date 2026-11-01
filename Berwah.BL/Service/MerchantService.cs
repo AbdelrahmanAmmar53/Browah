@@ -218,13 +218,16 @@ namespace Berwah.BL.Service
 
             return merchants.Select(m => new MerchantCardDto
             {
-                Id = m.Id,
+                MerchantId = m.Id,
                 BusinessName = m.BusinessName ?? $"{m.FirstName} {m.LastName}",
                 BusinessDescription = m.BusinessDescription ?? "",
                 BusinessType = m.BusinessType,
                 MerchantImageUrl = m.Images?.FirstOrDefault()?.Url ?? "",
                 Address = m.Address ?? "",
-                IsOpen = m.AcceptOrdersAutomatically
+                IsOpen = m.AcceptOrdersAutomatically,
+                WorkHours = m.WorkHours ?? "11:00 - 23:00",
+                Rating = 4.5m,
+                ReviewsCount = 0
             }).ToList();
         }
     }

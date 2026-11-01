@@ -28,6 +28,8 @@ namespace Berwah.Models.DTO.Merchant
         // 4. ملخص مبيعات اليوم
         public decimal TodaySales { get; set; }
         public int TodayOrdersCount { get; set; }
-        public int ActiveProductsCount { get; set; } 
+        public int ActiveProductsCount { get; set; }
+
+        public decimal AverageOrderValue => TodayOrdersCount > 0 ? TodaySales / TodayOrdersCount : 0;
     }
 }

@@ -13,10 +13,11 @@ namespace Berwah.BL.Service.IService
     { 
         Task<HomeDto> GetHomeDataAsync(string userId);
         Task<WebHomeDto> GetWebHomeDataAsync(string? userId);
-        Task<IEnumerable<MerchantCardDto>> GetHomeMadeFoodAsync();
+       // Task<IEnumerable<MerchantCardDto>> GetHomeMadeFoodAsync();
         Task<IEnumerable<SubCategoryDto>> GetServicesPageDataAsync();
         Task<IEnumerable<ServiceRequestDto>> GetAvailableRequestsForProvidersAsync(int? subCategoryId);
         Task<bool> CreateServiceRequestAsync(int userId, CreateServiceRequest dto);
         Task<IEnumerable<ServiceRequestDto>> GetAllServiceRequestsAsync();
+        Task<ServiceOfferResponseDto> SubmitOfferAsync(CreateServiceOfferDto dto, int providerId);
     }
 }

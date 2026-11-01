@@ -16,22 +16,22 @@ namespace Berwah.DAL.Repository.IRepository
         Task<Product> AddAsync(Product product, CancellationToken ct = default);
 
         Task<bool> UpdateAsync(Product product, CancellationToken ct = default);
-    
+
         Task<bool> DeleteAsync(Product product, CancellationToken ct = default);
-     
+
         Task<IEnumerable<ProductDto>> SearchAsync(SearchProductDto query, CancellationToken ct = default);
         Task<Product?> GetProductByIdAsync(int productId);
 
         Task<IEnumerable<Product>> GetProductsByUserIdAsync(int userId);
-        
-        Task<IEnumerable<Product>> GetProductsBySubCategoryIdAsync(int subCategoryId);
-        
+
         Task TrackViewAsync(int productId);
-        
+
         Task<IEnumerable<Product>> GetRecentlyViewedAsync(int count);
-        
-        Task<IEnumerable<MenuSectionDto>> GetMenuSectionsByMainCategoryIdAsync(int mainCategoryId);
-        
+
+        Task<IEnumerable<Product>> GetProductsByMerchantIdAsync(int merchantId);
+        Task<IEnumerable<MenuSectionDto>> GetMerchantMenuSectionsAsync(int merchantId);
+        Task<IEnumerable<Product>> GetProductsByMenuSectionIdAsync(int menuSectionId);
+        Task<bool> AddMenuSectionAsync(MenuSection section);
         Task SaveChangesAsync();
     }
 }

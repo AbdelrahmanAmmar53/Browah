@@ -14,6 +14,7 @@ namespace Berwah.Controllers
     {
         private readonly IMerchantService _merchantService;
         private readonly IProductService _productService;
+
         public MerchantController(IMerchantService merchantService, IProductService productService)
         {
             _merchantService = merchantService;
@@ -120,6 +121,7 @@ namespace Berwah.Controllers
         }
 
         #endregion
+
         [Authorize(Roles = "Merchant")]
         [HttpGet("Profile")]
         public async Task<IActionResult> GetMerchantProfile()
@@ -160,51 +162,85 @@ namespace Berwah.Controllers
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
         }
-        
-        [HttpGet("sections/{mainCategoryId:int}")]
-        public async Task<IActionResult> GetMenuSections(int mainCategoryId)
-        {
-            var sections = await _productService.GetMenuSectionsByMainCategoryIdAsync(mainCategoryId);
-            return Ok(new { status = "success", data = sections });
-        }
 
-        // GET api/menu/sections/{subCategoryId}/items
-        // returns menu items (products) for a subcategory
-        [HttpGet("sections/{subCategoryId:int}/items")]
-        public async Task<IActionResult> GetMenuItems(int subCategoryId)
-        {
-            var items = await _productService.GetProductsBySubCategoryAsync(subCategoryId);
-            return Ok(new { status = "success", data = items });
-        }
+        #region إدارة المنيو والأقسام للتاجر (Menu & Sections Endpoints)
 
-        // POST api/menu/items
-        // create a new menu item (merchant only)
+        // 1. جلب أقسام المنيو الخاصة بالتاجر الحالي (سندويتشات، وجبات، إلخ)
         [Authorize(Roles = "Merchant")]
-        [HttpPost("items")]
-        public async Task<IActionResult> CreateMenuItem([FromForm] CreateProductDto dto)
-        {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-
-            var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (!int.TryParse(idClaim, out var userId)) return Unauthorized(new { status = "fail", message = "Invalid user" });
-
-            await _productService.CreateProductAsync(userId, dto);
-
-            return Ok(new { status = "success", message = "Menu item created" });
-        }
-
-        [HttpGet("by-business-type/{businessType}")]
-        public async Task<IActionResult> GetMerchantsByBusinessType(string businessType)
+        [HttpGet("sections")]
+        public async Task<IActionResult> GetMyMenuSections()
         {
             try
             {
-                var merchants = await _merchantService.GetMerchantsByBusinessTypeAsync(businessType);
-                return Ok(new { status = "success", data = merchants });
+                var merchantId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var sections = await _productService.GetMerchantMenuSectionsAsync(merchantId);
+
+                return Ok(new { status = "success", data = sections });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
         }
+
+        // 2. إنشاء قسم جديد في المنيو خاص بهذا التاجر
+        [Authorize(Roles = "Merchant")]
+        [HttpPost("Createsections")]
+        public async Task<IActionResult> CreateMenuSection([FromBody] CreateMenuSectionDto dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            try
+            {
+                var merchantId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var success = await _productService.CreateMenuSectionAsync(merchantId, dto);
+
+                if (!success)
+                    return BadRequest(new { status = "error", message = "فشل إنشاء القسم الجديد" });
+
+                return Ok(new { status = "success", message = "تم إنشاء القسم بنجاح" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+  
+        [Authorize(Roles = "Merchant")]
+        [HttpGet("sections/{sectionId:int}/items")]
+        public async Task<IActionResult> GetMenuItems(int sectionId)
+        {
+            try
+            {
+                var items = await _productService.GetProductsByMenuSectionAsync(sectionId);
+                return Ok(new { status = "success", data = items });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        [Authorize(Roles = "Merchant")]
+        [HttpPost("items")]
+        public async Task<IActionResult> CreateMenuItem([FromForm] CreateProductDto dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            try
+            {
+                var merchantId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var createdProduct = await _productService.CreateProductAsync(merchantId, dto);
+
+                return Ok(new { status = "success", message = "تم إضافة الوجبة إلى المنيو بنجاح", data = createdProduct });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        #endregion
     }
 }   

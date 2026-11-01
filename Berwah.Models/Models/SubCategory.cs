@@ -8,5 +8,6 @@
         public int CategoryId { get; set; }
         public Category Category { get; set; }
         public ICollection<Product> Products { get; set; } = new List<Product>();
+        public ICollection<Advertisment> Advertisements { get; set; } = new List<Advertisment>();
     }
 }

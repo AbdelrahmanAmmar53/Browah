@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Berwah.Models.DTO
 {
-    public record ProductDto(int Id, string Name, string Description, decimal Price, string Currency, string ImageUrl, int Stock);
+    public record ProductDto(int Id, string Name, string Description, decimal Price, decimal OriginalPrice, bool IsAvailableForInstantOrder, bool IsSpecialOffer, bool IsActive, string Currency, string ImageUrl, int Stock);
     //public class ProductDto
     //{
     //        public int Id { get; set; }

@@ -26,5 +26,8 @@ namespace Berwah.DAL.Repository.IRepository
         Task<List<Advertisment>> GetRecentByUserIdAsync(int userId, int count);
 
         Task<IEnumerable<Advertisment>> GetBrowahMarketFeedAsync();
+        Task<IEnumerable<Advertisment>> GetAdminAdvertisementsAsync(int page, int pageSize);
+        Task<IEnumerable<Advertisment>> GetBySubCategoryIdsAsync(List<int> subCategoryIds, int page, int pageSize);
+        Task<IEnumerable<Advertisment>> GetByCategoryIdAsync(int categoryId, int page, int pageSize);
     }
 }

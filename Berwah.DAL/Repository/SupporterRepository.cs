@@ -35,5 +35,19 @@ namespace Berwah.DAL.Repository
         {
             return await _context.Faqs.ToListAsync();
         }
+        public async Task CreateFaqAsync(Faq faq)
+        {
+            await _context.Faqs.AddAsync(faq);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<User?> GetUserWithDetailsForExportAsync(int userId)
+        {
+            return await _context.Users
+                .Include(u => u.Advertisements)
+                .Include(u => u.ServiceRequests)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == userId);
+        }
     }
 }

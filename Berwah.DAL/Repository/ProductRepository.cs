@@ -32,13 +32,16 @@ namespace Berwah.DAL.Repository
                     p.Name,
                     p.Description,
                     p.Price,
+                    p.OriginalPrice,
+                    p.IsAvailableForInstantOrder,
+                    p.IsSpecialOffer,
+                    p.IsActive,
                     "EGP",
                     p.ImageUrl ?? string.Empty,
                     p.Stock
                 ))
                 .ToListAsync(ct);
         }
-
 
         public async Task<Product> AddAsync(Product product, CancellationToken ct = default)
         {
@@ -60,6 +63,7 @@ namespace Berwah.DAL.Repository
             await _context.SaveChangesAsync(ct);
             return true;
         }
+
         public async Task<IEnumerable<ProductDto>> SearchAsync(SearchProductDto query, CancellationToken ct = default)
         {
             var q = _context.Products.AsNoTracking().AsQueryable();
@@ -67,16 +71,15 @@ namespace Berwah.DAL.Repository
             if (!string.IsNullOrWhiteSpace(query.ProductName))
                 q = q.Where(p => EF.Functions.Like(p.Name, $"%{query.ProductName}%"));
 
-            return await q.Select(p => new ProductDto(p.Id, p.Name, p.Description, p.Price, p.Currency, p.ImageUrl, p.Stock))
-                          .ToListAsync(ct);
+            return await q.Select(p => new ProductDto(p.Id, p.Name, p.Description, p.Price, p.OriginalPrice, p.IsAvailableForInstantOrder, p.IsSpecialOffer, p.IsActive, "EGP", p.ImageUrl, p.Stock))
+                        .ToListAsync(ct);
         }
 
         public async Task<Product?> GetProductByIdAsync(int productId)
         {
             return await _context.Products
                 .Include(p => p.Image)
-                .Include(p => p.Category)
-                    .ThenInclude(sc => sc.SubCategories)
+                .Include(p => p.MenuSection) // 🟢 تحديث الرابط ليكون مع MenuSection
                 .Include(p => p.User)
                 .FirstOrDefaultAsync(p => p.Id == productId);
         }
@@ -86,18 +89,19 @@ namespace Berwah.DAL.Repository
             return await _context.Products
                 .Where(p => p.UserId == userId)
                 .Include(p => p.Image)
-                .Include(p => p.Category)
+                .Include(p => p.MenuSection) // 🟢 تحديث الرابط
                 .AsNoTracking()
                 .OrderByDescending(p => p.CreatedAt)
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<Product>> GetProductsBySubCategoryIdAsync(int subCategoryId)
+        // 🟢 جلب منتجات قسم معين في المنيو الخاص بالتاجر
+        public async Task<IEnumerable<Product>> GetProductsByMenuSectionIdAsync(int menuSectionId)
         {
             return await _context.Products
-                .Where(p => p.SubCategoryId == subCategoryId)
+                .Where(p => p.MenuSectionId == menuSectionId)
                 .Include(p => p.Image)
-                .Include(p => p.Category)
+                .Include(p => p.MenuSection)
                 .AsNoTracking()
                 .OrderByDescending(p => p.CreatedAt)
                 .ToListAsync();
@@ -121,26 +125,42 @@ namespace Berwah.DAL.Repository
                 .Select(v => v.Product)
                 .Distinct()
                 .Include(p => p.Image)
-                .Include(p => p.Category)
+                .Include(p => p.MenuSection)
                 .Take(count)
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<MenuSectionDto>> GetMenuSectionsByMainCategoryIdAsync(int mainCategoryId)
+        // 🟢 جلب أقسام المنيو الخاصة بالتاجر الحالي فقط
+        public async Task<IEnumerable<MenuSectionDto>> GetMerchantMenuSectionsAsync(int merchantId)
         {
-            var sections = await _context.SubCategories
+            var sections = await _context.menuSections
                 .AsNoTracking()
-                .Where(sc => sc.CategoryId == mainCategoryId)
-                .Select(sc => new MenuSectionDto
+                .Where(ms => ms.MerchantId == merchantId)
+                .Select(ms => new MenuSectionDto
                 {
-                    Id = sc.Id,
-                    Name = sc.Name,
-                    ProductCount = _context.Products.Count(p => p.SubCategoryId == sc.Id && p.IsActive)
+                    Id = ms.Id,
+                    Name = ms.Name,
+                    ProductCount = _context.Products.Count(p => p.MenuSectionId == ms.Id && p.IsActive)
                 })
-                .OrderBy(sc => sc.Name)
+                .OrderBy(ms => ms.Name)
                 .ToListAsync();
 
             return sections;
+        }
+
+        public async Task<IEnumerable<Product>> GetProductsByMerchantIdAsync(int merchantId)
+        {
+            return await _context.Products
+                .Where(p => p.UserId == merchantId)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        // 🟢 إضافة قسم جديد للمنيو الخاص بالتاجر
+        public async Task<bool> AddMenuSectionAsync(MenuSection section)
+        {
+            await _context.menuSections.AddAsync(section);
+            return await _context.SaveChangesAsync() > 0;
         }
 
         public async Task SaveChangesAsync()

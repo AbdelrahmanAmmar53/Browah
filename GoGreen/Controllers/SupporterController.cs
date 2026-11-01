@@ -45,5 +45,13 @@ namespace Berwah.Controllers
             var result = await _supporterService.GetFaqsAsync();
             return Ok(new { status = "success", data = result });
         }
+
+        [Authorize(Roles = "Admin")]
+        [HttpPost("CreateFaq")]
+        public async Task<IActionResult> CreateFaq([FromBody] CreateFaqDto dto)
+        {
+            var result = await _supporterService.CreateFaqAsync(dto);
+            return Ok(new { status = "success", message = "تم إنشاء السؤال الشائع بنجاح", data = result });
+        }
     }
 }

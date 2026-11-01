@@ -15,11 +15,15 @@ namespace Berwah.Models.DTO
         public string Description { get; set; } = string.Empty;
         [Range(0.01, double.MaxValue)]
         public decimal Price { get; set; }
+        public decimal OriginalPrice { get; set; }
+        public bool IsAvailableForInstantOrder { get; set; }
+        public bool IsSpecialOffer { get; set; }
+
         public int Stock { get; set; }
         public string Location { get; set; } = string.Empty;
-        public int CategoryId { get; set; }
-        public int? SubCategoryId { get; set; }
+ 
         public ProductCondition Condition { get; set; } = ProductCondition.NotApplicable;
+        public int MenuSectionId { get; set; }
 
         public IFormFile? ImageFile { get; set; }
 

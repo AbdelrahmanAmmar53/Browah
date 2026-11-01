@@ -13,6 +13,9 @@ namespace Berwah.DAL.Repository.IRepository
         Task<IEnumerable<Ticket>> GetUserTicketsAsync(int? userId);
         Task CreateTicketAsync(Ticket ticket);
         Task<IEnumerable<Berwah.Models.Models.Faq>> GetFaqsAsync();
+        Task CreateFaqAsync(Berwah.Models.Models.Faq faq);
+
+        Task<User?> GetUserWithDetailsForExportAsync(int userId);
 
     }
 }

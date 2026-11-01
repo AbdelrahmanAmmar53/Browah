@@ -18,5 +18,10 @@ namespace Berwah.DAL.Repository.IRepository
         Task<int> GetActiveProductsCountAsync(int merchantId);
         Task<IEnumerable<User>> GetMerchantsByBusinessTypeAsync(string businessType);
 
+        // أقسام المنيو والمنتجات
+        Task<IEnumerable<MenuSection>> GetMerchantMenuSectionsAsync(int merchantId);
+        Task<bool> AddMenuSectionAsync(MenuSection section);
+        Task<IEnumerable<Product>> GetProductsByMenuSectionAsync(int menuSectionId);
+        Task<MenuSection?> GetMenuSectionByIdAsync(int menuSectionId);
     }
 }
