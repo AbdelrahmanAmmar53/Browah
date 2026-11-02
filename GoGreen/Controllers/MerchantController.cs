@@ -60,7 +60,7 @@ namespace Berwah.Controllers
 
         [Authorize(Roles = "Merchant")]
         [HttpPost("ToggleStoreStatus")]
-        public async Task<IActionResult> ToggleStoreStatus([FromBody] bool isOpen)
+        public async Task<IActionResult> ToggleStoreStatus([FromQuery] bool isOpen)
         {
             try
             {
@@ -213,8 +213,29 @@ namespace Berwah.Controllers
         {
             try
             {
-                var items = await _productService.GetProductsByMenuSectionAsync(sectionId);
+                var merchantId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                // Only the items of this merchant's own section.
+                var items = await _merchantService.GetSectionItemsAsync(merchantId, sectionId);
                 return Ok(new { status = "success", data = items });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        // The store page a customer sees: the store and its sections with their items.
+        [Authorize]
+        [HttpGet("{merchantId:int}/menu")]
+        public async Task<IActionResult> GetStoreMenu(int merchantId)
+        {
+            try
+            {
+                var menu = await _merchantService.GetStoreMenuAsync(merchantId);
+                if (menu == null)
+                    return NotFound(new { status = "fail", message = "المحل غير موجود" });
+
+                return Ok(new { status = "success", data = menu });
             }
             catch (Exception ex)
             {

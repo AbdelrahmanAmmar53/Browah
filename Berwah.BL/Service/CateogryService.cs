@@ -51,16 +51,34 @@ namespace Berwah.BL.Service
                 case CategoryType.Restaurant:
                 case CategoryType.Grocery:
                 case CategoryType.HomeFood:
-                    var merchants = await _merchantRepository.GetMerchantsByBusinessTypeAsync(category.Name);
+                    // Merchants are matched by the category's type, not by its name:
+                    // the app registers them as "مطعم" / "بقالة" / "مطبخ بيتي", while
+                    // the categories are named "مطاعم" / "البقالة" / "اكل بيتي".
+                    var types = category.CategoryType switch
+                    {
+                        CategoryType.Restaurant => new[] { "مطعم", "مطاعم", "restaurant" },
+                        CategoryType.Grocery => new[] { "بقالة", "البقالة", "grocery" },
+                        _ => new[] { "مطبخ بيتي", "اكل بيتي", "أكل بيتي", "homefood" }
+                    };
+                    // A store registered as "other" (any free-text activity) is shown as a restaurant,
+                    // so the restaurant list is everyone who is not grocery / home food.
+                    var groceryTypes = new[] { "بقالة", "البقالة", "grocery" };
+                    var homeTypes = new[] { "مطبخ بيتي", "اكل بيتي", "أكل بيتي", "homefood" };
+                    var merchants = category.CategoryType == CategoryType.Restaurant
+                        ? await _merchantRepository.GetMerchantsExceptBusinessTypesAsync(groceryTypes.Concat(homeTypes).ToArray())
+                        : await _merchantRepository.GetMerchantsByBusinessTypesAsync(types);
                     response.Items = merchants.Select(m => new MerchantCardDto
                     {
                         MerchantId = m.Id,
-                        BusinessName = m.BusinessName ?? string.Empty,
+                        BusinessName = m.BusinessName ?? $"{m.FirstName} {m.LastName}".Trim(),
                         BusinessDescription = m.BusinessDescription ?? string.Empty,
                         BusinessType = m.BusinessType ?? string.Empty,
-                        MerchantImageUrl = m.ProfileImageUrl,
+                        MerchantImageUrl = m.ProfileImageUrl ?? m.Images?.FirstOrDefault()?.Url,
                         Address = m.Address ?? string.Empty,
-                        IsOpen = !m.IsFrozen
+                        // Closed stores are listed too, flagged closed (the merchant toggles IsFrozen).
+                        IsOpen = !m.IsFrozen,
+                        WorkHours = m.WorkHours,
+                        Rating = m.Rating > 0 ? (decimal?)m.Rating : null
                     }).Cast<object>().ToList();
                     break;
 

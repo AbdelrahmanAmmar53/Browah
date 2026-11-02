@@ -126,10 +126,28 @@ namespace Berwah.Controllers
                     .Where(o => o.DeliveryId == null && o.Status == OrderStatus.Pending)
                     .Include(o => o.OrderItems)
                     .ThenInclude(oi => oi.Product)
+                    .ThenInclude(p => p.User)
                     .ToListAsync();
 
                 var availableOrders = orders.Select(o =>
                 {
+                    // The stores the order is picked up from (one per merchant in the cart).
+                    var stops = o.OrderItems
+                        .Where(oi => oi.Product?.User != null)
+                        .GroupBy(oi => oi.Product!.User!.Id)
+                        .Select(g =>
+                        {
+                            var u = g.First().Product!.User!;
+                            return new DeliveryStopDto
+                            {
+                                MerchantId = u.Id,
+                                StoreName = string.IsNullOrWhiteSpace(u.BusinessName) ? $"{u.FirstName} {u.LastName}".Trim() : u.BusinessName!,
+                                Address = u.Address ?? string.Empty,
+                                Latitude = u.Latitude,
+                                Longitude = u.Longitude,
+                                ItemsCount = g.Sum(x => x.Quantity)
+                            };
+                        }).ToList();
                     // استخدام الإحداثيات الحقيقية المخزنة في قاعدة البيانات لكل طلب
                     double pickupLat = o.PickupLatitude != 0 ? o.PickupLatitude : 30.0444;
                     double pickupLon = o.PickupLongitude != 0 ? o.PickupLongitude : 31.2357;
@@ -148,8 +166,13 @@ namespace Berwah.Controllers
                         OrderType = "توصيل طلبات متجر",
                         CategoryBadge = "نشط",
 
-                        PickupTitle = "مستودع برواح / المطعم",
-                        PickupAddress = "جاهز للاستلام الفوري",
+                        PickupTitle = stops.Count == 0 ? "مستودع برواح / المطعم"
+                            : stops.Count == 1 ? stops[0].StoreName
+                            : $"{stops.Count} محلات: " + string.Join("، ", stops.Select(s => s.StoreName)),
+                        PickupAddress = stops.Count == 0 ? "جاهز للاستلام الفوري"
+                            : stops.Count == 1 ? (string.IsNullOrWhiteSpace(stops[0].Address) ? "جاهز للاستلام الفوري" : stops[0].Address)
+                            : "استلام من أكثر من محل",
+                        Stops = stops,
                         PickupDistance = $"يبعد {distanceKm} كم عن موقعك",
 
                         DropoffTitle = "عنوان العميل",
@@ -234,27 +257,84 @@ namespace Berwah.Controllers
             }
         }
 
-        // تأكيد استلام الطلب من المطعم والبدء في التحرك للعميل
+        // تأكيد استلام الطلب من محل (أو من كل المحلات لو merchantId مش مبعوت)
         [Authorize(Roles = "Delivery")]
         [HttpPost("orders/{orderId}/pickup")]
-        public async Task<IActionResult> ConfirmPickup(int orderId)
+        public async Task<IActionResult> ConfirmPickup(int orderId, [FromQuery] int? merchantId = null)
+        {
+            var deliveryId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var order = await _context.Orders
+                .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
+                .FirstOrDefaultAsync(o => o.Id == orderId && o.DeliveryId == deliveryId);
+
+            if (order == null) return NotFound(new { status = "error", message = "الطلب غير موجود أو غير مسجل لك" });
+            if (order.Status == OrderStatus.Delivered || order.Status == OrderStatus.Cancelled)
+                return BadRequest(new { status = "error", message = "الطلب منتهي بالفعل" });
+
+            // Items of stores that rejected their part are not collected.
+            var active = order.OrderItems.Where(i => i.MerchantStatus != OrderStatus.Cancelled).ToList();
+            var toPick = merchantId.HasValue
+                ? active.Where(i => i.Product != null && i.Product.UserId == merchantId.Value).ToList()
+                : active;
+
+            if (toPick.Count == 0)
+                return NotFound(new { status = "error", message = "لا توجد أصناف من هذا المحل في الطلب" });
+
+            foreach (var item in toPick)
+                if (item.PickedUpAt == null) item.PickedUpAt = DateTime.UtcNow;
+
+            int remaining = active
+                .Where(i => i.PickedUpAt == null && i.Product != null)
+                .Select(i => i.Product.UserId).Distinct().Count();
+            bool allPickedUp = remaining == 0;
+
+            if (allPickedUp) order.Status = OrderStatus.OutForDelivery;
+            await _context.SaveChangesAsync();
+
+            if (allPickedUp)
+            {
+                // إشعار العميل فوراً بتحديث الشاشة إلى مرحلة "في الطريق إليك"
+                await _hubContext.Clients.Group($"order_{orderId}").SendAsync("ReceiveOrderStatusUpdate", new
+                {
+                    status = order.Status.ToString(),
+                    message = "تم استلام الطلب من المحلات وهو في طريقه إليك الآن"
+                });
+            }
+
+            return Ok(new
+            {
+                status = "success",
+                allPickedUp,
+                remainingStops = remaining,
+                message = allPickedUp
+                    ? "تم استلام كل الطلب، جاري التوجه للعميل"
+                    : $"تم الاستلام، متبقي {remaining} محل"
+            });
+        }
+
+        // تأكيد تسليم الطلب للعميل
+        [Authorize(Roles = "Delivery")]
+        [HttpPost("orders/{orderId}/deliver")]
+        public async Task<IActionResult> ConfirmDelivered(int orderId)
         {
             var deliveryId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == orderId && o.DeliveryId == deliveryId);
 
             if (order == null) return NotFound(new { status = "error", message = "الطلب غير موجود أو غير مسجل لك" });
+            if (order.Status != OrderStatus.OutForDelivery)
+                return BadRequest(new { status = "error", message = "استلم الطلب من كل المحلات أولاً" });
 
-            order.Status = OrderStatus.Delivered; // أو مرحلة OnTheWayToCustomer حسب حالة الـ Enum لديك
+            order.Status = OrderStatus.Delivered;
+            order.ConditionStaus = "تم التسليم";
             await _context.SaveChangesAsync();
 
-            // إشعار العميل فوراً بتحديث الشاشة إلى مرحلة "في الطريق إليك"
             await _hubContext.Clients.Group($"order_{orderId}").SendAsync("ReceiveOrderStatusUpdate", new
             {
                 status = order.Status.ToString(),
-                message = "تم استلام الطلب من المطعم وهو في طريقه إليك الآن"
+                message = "تم تسليم طلبك، بالهنا والشفا"
             });
 
-            return Ok(new { status = "success", message = "تم تأكيد الاستلام، جاري التوجه للعميل" });
+            return Ok(new { status = "success", message = "تم تسليم الطلب" });
         }
 
         // تحديث إحداثيات موقع الكابتن لحظياً على الخريطة

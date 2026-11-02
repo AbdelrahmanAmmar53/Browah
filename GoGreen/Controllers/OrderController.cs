@@ -82,6 +82,10 @@ namespace Berwah.Controllers
                 // سنأخذ إحداثيات الاستلام (Pickup) من أول منتج أو تاجر في السلة كافتراضي
                 double pickupLat = 30.0444; // قيمة افتراضية لحين توفر إحداثيات البائع
                 double pickupLon = 31.2357;
+                // The cart can hold items of several stores: it is still one order. The
+                // pickup point is the first store that has coordinates; the courier sees
+                // every store as a stop (Delivery/AvailableOrders -> stops).
+                bool pickupFromStore = false;
 
                 foreach (var cartItem in model.Items)
                 {
@@ -92,12 +96,18 @@ namespace Berwah.Controllers
                     if (product == null || product.Stock < cartItem.Quantity)
                         return BadRequest(new { status = "error", message = "المنتج غير موجود أو الكمية غير متوفرة" });
 
-                    // إذا كان التاجر يمتلك إحداثيات مسجلة في حسابه، نأخذها كموقع استلام الطلب
                     if (product.User != null)
                     {
-                        // (ملاحظة: تأكد من إضافة Latitude و Longitude لجدول User/Merchant لو أردت، أو استخدم قيم افتراضية)
-                        pickupLat = product.User.Latitude; 
-                        // pickupLon = product.User.Longitude;
+                        // A closed store (the merchant toggled it off) takes no orders.
+                        if (product.User.UserType == UserType.Merchant && product.User.IsFrozen)
+                            return BadRequest(new { status = "error", message = "المتجر مغلق حاليًا ولا يستقبل طلبات" });
+
+                        if (!pickupFromStore && product.User.Latitude != 0 && product.User.Longitude != 0)
+                        {
+                            pickupLat = product.User.Latitude;
+                            pickupLon = product.User.Longitude;
+                            pickupFromStore = true;
+                        }
                     }
 
                     // فحص حالة المنتج إذا كان مستعملاً (Used)
@@ -112,7 +122,8 @@ namespace Berwah.Controllers
                     {
                         ProductId = product.Id,
                         Quantity = cartItem.Quantity,
-                        Price = product.Price
+                        Price = product.Price,
+                        MerchantStatus = OrderStatus.Pending
                     });
 
                     product.Stock -= cartItem.Quantity;
@@ -207,7 +218,7 @@ namespace Berwah.Controllers
                 {
                     new() { Title = "تم تأكيد الطلب", Subtitle = order.CreatedAt.ToString("hh:mm tt"), IsCompleted = true, IsCurrent = false },
                     new() { Title = "جاري التجهيز والخرج الآمن", Subtitle = "شحن موجّه داخل العبوة وتحت الرقابة", IsCompleted = order.Status >= OrderStatus.Processing, IsCurrent = order.Status == OrderStatus.Processing },
-                    new() { Title = "في الطريق إليك", Subtitle = "سريع جداً", IsCompleted = order.Status >= OrderStatus.Shipped, IsCurrent = order.Status == OrderStatus.Shipped },
+                    new() { Title = "في الطريق إليك", Subtitle = "سريع جداً", IsCompleted = order.Status >= OrderStatus.Shipped, IsCurrent = order.Status == OrderStatus.Shipped || order.Status == OrderStatus.OutForDelivery },
                     new() { Title = "تم التسليم والاستلام", Subtitle = "شكراً لاختيارك برواح", IsCompleted = order.Status == OrderStatus.Delivered, IsCurrent = order.Status == OrderStatus.Delivered }
                 };
 

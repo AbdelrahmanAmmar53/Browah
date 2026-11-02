@@ -80,6 +80,59 @@ namespace Berwah.DAL.Repository
                 .ToListAsync();
         }
 
+        public async Task<IEnumerable<User>> GetMerchantsByBusinessTypesAsync(string[] types)
+        {
+            var wanted = types.Select(t => t.Trim().ToLower()).ToList();
+            return await _context.Users
+                .AsNoTracking()
+                .Where(u => u.UserType == UserType.Merchant
+                            && u.BusinessType != null
+                            && wanted.Contains(u.BusinessType.Trim().ToLower()))
+                .Include(u => u.Images)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<User>> GetMerchantsExceptBusinessTypesAsync(string[] excludedTypes)
+        {
+            var excluded = excludedTypes.Select(t => t.Trim().ToLower()).ToList();
+            return await _context.Users
+                .AsNoTracking()
+                .Where(u => u.UserType == UserType.Merchant
+                            && (u.BusinessType == null || !excluded.Contains(u.BusinessType.Trim().ToLower())))
+                .Include(u => u.Images)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<MenuSection>> GetMenuSectionsWithActiveProductsAsync(int merchantId)
+        {
+            var sections = await _context.menuSections
+                .AsNoTracking()
+                .Where(s => s.MerchantId == merchantId)
+                .OrderBy(s => s.Name)
+                .ToListAsync();
+
+            foreach (var section in sections)
+            {
+                section.Products = await _context.Products
+                    .AsNoTracking()
+                    .Include(p => p.Image)
+                    .Where(p => p.MenuSectionId == section.Id && p.IsActive)
+                    .OrderByDescending(p => p.CreatedAt)
+                    .ToListAsync();
+            }
+            return sections;
+        }
+
+        public async Task<IEnumerable<Product>> GetMerchantSectionProductsAsync(int merchantId, int menuSectionId)
+        {
+            return await _context.Products
+                .AsNoTracking()
+                .Include(p => p.Image)
+                .Where(p => p.MenuSectionId == menuSectionId && p.MenuSection.MerchantId == merchantId)
+                .OrderByDescending(p => p.CreatedAt)
+                .ToListAsync();
+        }
+
         public async Task<IEnumerable<User>> GetMerchantsByCategoryIdAsync(int categoryId)
         {
             return await _context.Users

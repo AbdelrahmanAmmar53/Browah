@@ -39,6 +39,8 @@ namespace Berwah.BL.Service
                 SubCategoryId = dto.SubCategoryId,
                 PromotionPlan = dto.PromotionPlan,
                 UserId = userId,
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
                 CreatedAt = DateTime.UtcNow,
                 AdvertismentImages = new List<AdvertismentImage>(),
                 Specifications = new List<AdvertisementSpecification>()

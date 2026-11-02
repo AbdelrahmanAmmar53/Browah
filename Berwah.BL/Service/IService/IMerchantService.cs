@@ -1,4 +1,5 @@
-﻿using Berwah.Models.DTO.Merchant;
+﻿using Berwah.Models.DTO;
+using Berwah.Models.DTO.Merchant;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,6 +17,11 @@ namespace Berwah.BL.Service.IService
         Task<bool> ConfirmOrderRejectionAsync(int orderId, int merchantId, ConfirmRejectOrderDto model);
         Task<MerchantProfileResponseDto?> GetMerchantProfileAsync(int merchantId);
         Task<bool> UpdateWorkHoursAsync(int merchantId, string workHours);
+        Task<bool> UpdateLocationAsync(int merchantId, double latitude, double longitude);
         Task<IEnumerable<MerchantCardDto>> GetMerchantsByBusinessTypeAsync(string businessType);
+        /// <summary>The store page a customer sees; null when the merchant doesn't exist.</summary>
+        Task<StoreMenuDto?> GetStoreMenuAsync(int merchantId);
+        /// <summary>The merchant's own items in one of his sections; empty when it isn't his.</summary>
+        Task<IEnumerable<ProductCardDto>> GetSectionItemsAsync(int merchantId, int sectionId);
     }
 }

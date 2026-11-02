@@ -27,5 +27,9 @@ namespace Berwah.Models.DTO
 
         public string? WorkHours { get; set; }
         public bool AcceptOrdersAutomatically { get; set; }
+
+        /// <summary>Where the shop is, picked by the app (optional). Used as the courier's pickup point.</summary>
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
     }
 }

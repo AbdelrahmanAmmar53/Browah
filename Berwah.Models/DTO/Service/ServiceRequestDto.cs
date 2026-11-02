@@ -16,6 +16,10 @@ namespace Berwah.Models.DTO.Service
         public decimal Price { get; set; }
         public string? PickupAddress { get; set; }
         public string? DeliveryAddress { get; set; }
+        public double? PickupLatitude { get; set; }
+        public double? PickupLongitude { get; set; }
+        public double? DeliveryLatitude { get; set; }
+        public double? DeliveryLongitude { get; set; }
         public string? AttachmentUrl { get; set; }
         public string TimeAgo { get; set; } = string.Empty;
     }

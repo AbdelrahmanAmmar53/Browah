@@ -28,5 +28,18 @@ namespace Berwah.Models.DTO.Delivery
         // ملاحظات الدفع أو الاستلام
         public string PaymentNote { get; set; } = string.Empty; 
         public string ActionButtonText { get; set; } = string.Empty; 
+
+        // Every store the order is picked up from (one when the cart had a single store).
+        public List<DeliveryStopDto> Stops { get; set; } = new();
+    }
+
+    public class DeliveryStopDto
+    {
+        public int MerchantId { get; set; }
+        public string StoreName { get; set; } = string.Empty;
+        public string Address { get; set; } = string.Empty;
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public int ItemsCount { get; set; }
     }
 }

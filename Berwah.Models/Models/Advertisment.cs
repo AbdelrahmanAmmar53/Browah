@@ -37,6 +37,10 @@ namespace Berwah.Models.Models
 
         public bool IsActive { get; set; }
 
+        // Where the seller picked the ad's location on the map.
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+
         // public int? SubCategoryId { get; set; }
         // public SubCategory? SubCategory { get; set; }
 

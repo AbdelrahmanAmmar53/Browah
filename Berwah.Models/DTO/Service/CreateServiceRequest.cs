@@ -12,6 +12,11 @@ namespace Berwah.Models.DTO.Service
         public int SubCategoryId { get; set; }
         public string? PickupAddress { get; set; }
         public string? DeliveryAddress { get; set; }
+        // The two places as picked on the map by the app (optional).
+        public double? PickupLatitude { get; set; }
+        public double? PickupLongitude { get; set; }
+        public double? DeliveryLatitude { get; set; }
+        public double? DeliveryLongitude { get; set; }
         public DateTime? PreferredDate { get; set; }
         public string? PreferredTimeSlot { get; set; }
         public string Description { get; set; } = string.Empty;

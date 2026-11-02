@@ -3,6 +3,7 @@ using Berwah.DAL.Repository.IRepository;
 using Berwah.Models.DTO;
 using Berwah.Models.DTO.Merchant;
 using Berwah.Models.Enum;
+using Berwah.Models.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,18 +29,24 @@ namespace Berwah.BL.Service
 
             var allOrders = await _merchantRepository.GetMerchantOrdersAsync(merchantId);
 
-            int totalActive = allOrders.Count(o => o.Status != OrderStatus.Delivered);
-            int cookingCount = allOrders.Count(o => o.Status == OrderStatus.Processing);
-            int readyCount = allOrders.Count(o => o.Status == OrderStatus.Shipped || (o.DeliveryId != null && o.Status == OrderStatus.Processing));
+            // An order can hold items of several stores: each store sees its own part and
+            // its own progress (StatusFor), not the other stores'.
+            int totalActive = allOrders.Count(o => StatusFor(o, merchantId) != OrderStatus.Delivered);
+            int cookingCount = allOrders.Count(o => StatusFor(o, merchantId) == OrderStatus.Processing);
+            int readyCount = allOrders.Count(o =>
+            {
+                var st = StatusFor(o, merchantId);
+                return st == OrderStatus.Shipped || (o.DeliveryId != null && st == OrderStatus.Processing);
+            });
 
             decimal todaySales = allOrders
                 .Where(o => o.CreatedAt.Date == DateTime.UtcNow.Date && o.Status == OrderStatus.Delivered)
-                .Sum(o => (decimal)o.TotalPrice);
+                .Sum(o => TotalFor(o, merchantId));
 
             var filteredOrders = filter?.ToLower() switch
             {
-                "new" => allOrders.Where(o => o.Status == OrderStatus.Pending).ToList(),
-                "cooking" => allOrders.Where(o => o.Status == OrderStatus.Processing).ToList(),
+                "new" => allOrders.Where(o => StatusFor(o, merchantId) == OrderStatus.Pending).ToList(),
+                "cooking" => allOrders.Where(o => StatusFor(o, merchantId) == OrderStatus.Processing).ToList(),
                 "ready" => allOrders.Where(o => o.DeliveryId != null).ToList(),
                 _ => allOrders
             };
@@ -50,11 +57,11 @@ namespace Berwah.BL.Service
                 OrderNumber = $"#ORD-{o.Id}",
                 CustomerName = $"{o.User?.FirstName} {o.User?.LastName}".Trim(),
                 CustomerAddress = o.User?.Address ?? "العنوان المحدد",
-                TotalPrice = (decimal)o.TotalPrice,
-                Status = o.Status.ToString(),
-                StatusBadgeText = o.Status == OrderStatus.Pending ? "طلب جديد" : "قيد التجهيز",
+                TotalPrice = TotalFor(o, merchantId),
+                Status = StatusFor(o, merchantId).ToString(),
+                StatusBadgeText = StatusFor(o, merchantId) == OrderStatus.Pending ? "طلب جديد" : "قيد التجهيز",
                 PaymentMethod = o.PaymentMethod == PaymentMethod.Cash ? "نقداً (كاش)" : "دفع إلكتروني",
-                Items = o.OrderItems.Select(oi => new MerchantOrderItemDto
+                Items = OwnItems(o, merchantId).Select(oi => new MerchantOrderItemDto
                 {
                     ProductName = oi.Product?.Name ?? "منتج",
                     Quantity = oi.Quantity,
@@ -75,24 +82,81 @@ namespace Berwah.BL.Service
             };
         }
 
+        // ---- Orders that hold items of several stores ----
+
+        /// <summary>The items of <paramref name="o"/> that belong to this merchant.</summary>
+        private static List<OrderItem> OwnItems(Order o, int merchantId) =>
+            o.OrderItems.Where(oi => oi.Product != null && oi.Product.UserId == merchantId).ToList();
+
+        /// <summary>
+        /// What the merchant earns/handles in the order: the whole total when every item is
+        /// his, otherwise just his items.
+        /// </summary>
+        private static decimal TotalFor(Order o, int merchantId)
+        {
+            var own = OwnItems(o, merchantId);
+            if (own.Count == 0 || own.Count == o.OrderItems.Count) return (decimal)o.TotalPrice;
+            return own.Sum(i => i.Price * i.Quantity);
+        }
+
+        /// <summary>The order's progress as this merchant sees it (his own items only).</summary>
+        private static OrderStatus StatusFor(Order o, int merchantId)
+        {
+            if (o.Status == OrderStatus.Delivered || o.Status == OrderStatus.Cancelled
+                || o.Status == OrderStatus.PendingAdminApproval) return o.Status;
+
+            var own = OwnItems(o, merchantId);
+            if (own.Count == 0) return o.Status;
+
+            var states = own.Select(i => i.MerchantStatus ?? o.Status).ToList();
+            if (states.All(s => s == OrderStatus.Shipped)) return OrderStatus.Shipped;
+            if (states.Any(s => s == OrderStatus.Processing || s == OrderStatus.Shipped)) return OrderStatus.Processing;
+            return states.First();
+        }
+
+        /// <summary>
+        /// The whole order is ready for the courier only when every store's items are; as soon
+        /// as one store starts, the order is being prepared.
+        /// </summary>
+        private static void RecalculateOrderStatus(Order order)
+        {
+            var states = order.OrderItems.Select(i => i.MerchantStatus ?? order.Status).ToList();
+            if (states.Count == 0) return;
+
+            if (states.All(s => s == OrderStatus.Shipped))
+            {
+                order.Status = OrderStatus.Shipped;
+                order.ConditionStaus = "جاهز لتسليم الوجبات للمندوب";
+            }
+            else if (states.Any(s => s == OrderStatus.Processing || s == OrderStatus.Shipped))
+            {
+                order.Status = OrderStatus.Processing;
+                order.ConditionStaus = states.Any(s => s == OrderStatus.Shipped)
+                    ? "بعض المحلات جهزت طلبك والباقي قيد التجهيز"
+                    : "قيد الطهي والتجهيز";
+            }
+        }
+
         public async Task<bool> UpdateOrderStatusAsync(int orderId, int merchantId, UpdateMerchantOrderStatusDto model)
         {
             var order = await _merchantRepository.GetMerchantOrderWithDetailsAsync(orderId, merchantId);
             if (order == null) return false;
 
+            var ownItems = OwnItems(order, merchantId);
             if (model.NewStatus == "Cooking")
             {
-                order.Status = OrderStatus.Processing;
-                order.ConditionStaus = "قيد الطهي والتجهيز";
+                foreach (var item in ownItems) item.MerchantStatus = OrderStatus.Processing;
+                RecalculateOrderStatus(order);
             }
             else if (model.NewStatus == "Ready")
             {
-                order.Status = OrderStatus.Shipped;
-                order.ConditionStaus = "جاهز لتسليم الوجبات للمندوب";
+                foreach (var item in ownItems) item.MerchantStatus = OrderStatus.Shipped;
+                RecalculateOrderStatus(order);
             }
             else if (model.NewStatus == "Cancelled")
             {
                 order.Status = OrderStatus.Cancelled;
+                foreach (var item in order.OrderItems) item.MerchantStatus = OrderStatus.Cancelled;
                 order.ConditionStaus = "تم إلغاء الطلب من قبل المتجر";
             }
 
@@ -131,8 +195,8 @@ namespace Berwah.BL.Service
                 OrderNumber = $"#ORD-{order.Id}",
                 CustomerName = $"{order.User?.FirstName} {order.User?.LastName}".Trim(),
                 CustomerAddress = order.User?.Address ?? "العنوان المحدد",
-                TotalPrice = (decimal)order.TotalPrice,
-                Items = order.OrderItems.Select(oi => new MerchantOrderItemDto
+                TotalPrice = TotalFor(order, merchantId),
+                Items = OwnItems(order, merchantId).Select(oi => new MerchantOrderItemDto
                 {
                     ProductName = oi.Product?.Name ?? "منتج",
                     Quantity = oi.Quantity,
@@ -179,7 +243,7 @@ namespace Berwah.BL.Service
             int activeProducts = await _merchantRepository.GetActiveProductsCountAsync(merchantId);
             // مبيعات وعديد طلبات اليوم المكتملة
             var todayOrders = orders.Where(o => o.CreatedAt.Date == DateTime.UtcNow.Date && o.Status == OrderStatus.Delivered).ToList();
-            decimal todaySales = todayOrders.Sum(o => (decimal)o.TotalPrice);
+            decimal todaySales = todayOrders.Sum(o => TotalFor(o, merchantId));
 
             return new MerchantProfileResponseDto
             {
@@ -191,8 +255,9 @@ namespace Berwah.BL.Service
                 IsVerified = true,
                 IsOpenForOrders = !merchant.IsFrozen,
                 WorkHours = string.IsNullOrEmpty(merchant.WorkHours) ? "11:00 ص - 02:00 ص" : merchant.WorkHours,
-                Rating = 4.9,
-                TotalReviewsCount = 1200,
+                // Real figure: 0 until the store has a rating (the app then shows a dash).
+                Rating = merchant.Rating,
+                TotalReviewsCount = 0,
                 SupervisorName = $"{merchant.FirstName} {merchant.LastName}".Trim(),
                 AvgPreparationTime = merchant.DeliveryTimeSpan ?? "18 دقيقة",
                 TodaySales = todaySales,
@@ -210,6 +275,60 @@ namespace Berwah.BL.Service
             await _merchantRepository.UpdateMerchantAsync(merchant);
             return true;
         }
+
+        public async Task<StoreMenuDto?> GetStoreMenuAsync(int merchantId)
+        {
+            var merchant = await _merchantRepository.GetMerchantByIdAsync(merchantId);
+            if (merchant == null || merchant.UserType != UserType.Merchant) return null;
+
+            var sections = await _merchantRepository.GetMenuSectionsWithActiveProductsAsync(merchantId);
+            var store = new StoreMenuDto
+            {
+                MerchantId = merchant.Id,
+                BusinessName = merchant.BusinessName ?? $"{merchant.FirstName} {merchant.LastName}".Trim(),
+                BusinessDescription = merchant.BusinessDescription ?? string.Empty,
+                BusinessType = merchant.BusinessType ?? string.Empty,
+                MerchantImageUrl = merchant.ProfileImageUrl ?? merchant.Images?.FirstOrDefault()?.Url,
+                Address = merchant.Address ?? string.Empty,
+                // Same flag the merchant toggles with ToggleStoreStatus.
+                IsOpen = !merchant.IsFrozen,
+                WorkHours = merchant.WorkHours,
+                Rating = merchant.Rating > 0 ? (decimal?)merchant.Rating : null,
+                Sections = sections.Select(s => new StoreMenuSectionDto
+                {
+                    Id = s.Id,
+                    Name = s.Name,
+                    ProductCount = s.Products?.Count ?? 0,
+                    Items = (s.Products ?? new List<Product>()).Select(p => ToCard(p, merchant)).ToList()
+                }).ToList()
+            };
+            return store;
+        }
+
+        public async Task<IEnumerable<ProductCardDto>> GetSectionItemsAsync(int merchantId, int sectionId)
+        {
+            var merchant = await _merchantRepository.GetMerchantByIdAsync(merchantId);
+            var products = await _merchantRepository.GetMerchantSectionProductsAsync(merchantId, sectionId);
+            return products.Select(p => ToCard(p, merchant)).ToList();
+        }
+
+        private static ProductCardDto ToCard(Product p, User? seller) => new ProductCardDto
+        {
+            Id = p.Id,
+            Name = p.Name,
+            Description = p.Description ?? string.Empty,
+            Price = p.Price,
+            DiscountedPrice = p.Discount,
+            Currency = "EGP",
+            Location = p.Location ?? string.Empty,
+            ImageUrl = p.Image?.Url ?? p.ImageUrl ?? string.Empty,
+            Condition = p.Condition.ToString(),
+            UserId = p.UserId,
+            SellerName = seller?.BusinessName ?? $"{seller?.FirstName} {seller?.LastName}".Trim(),
+            IsSellerVerified = seller?.IsVerified ?? false,
+            Stock = p.Stock > 0,
+            CreatedAt = p.CreatedAt
+        };
 
         public async Task<IEnumerable<MerchantCardDto>> GetMerchantsByBusinessTypeAsync(string businessType)
         {
@@ -229,6 +348,11 @@ namespace Berwah.BL.Service
                 Rating = 4.5m,
                 ReviewsCount = 0
             }).ToList();
+        }
+
+        public Task<bool> UpdateLocationAsync(int merchantId, double latitude, double longitude)
+        {
+            throw new NotImplementedException();
         }
     }
 }

@@ -367,6 +367,13 @@ namespace Berwah.Controllers
                     user.WorkHours = merchantDto.WorkHours?.Trim();
                     user.AcceptOrdersAutomatically = merchantDto.AcceptOrdersAutomatically;
 
+                    if (merchantDto.Latitude.HasValue && merchantDto.Longitude.HasValue)
+                        //&& Berwah.BL.Service.MerchantService.IsValidLocation(merchantDto.Latitude.Value, merchantDto.Longitude.Value))
+                    {
+                        user.Latitude = merchantDto.Latitude.Value;
+                        user.Longitude = merchantDto.Longitude.Value;
+                    }
+
                     user.UserType = UserType.Merchant;
                     userPassword = merchantDto.Password;
                 }

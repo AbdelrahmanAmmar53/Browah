@@ -13,6 +13,9 @@ namespace Berwah.Models.Enum
         Processing,
         Shipped,
         Delivered,
-        Cancelled
+        Cancelled,
+        // Appended last on purpose: the numbers stored in the database stay valid.
+        // The courier has picked everything up and is on the way to the customer.
+        OutForDelivery
     }
 }

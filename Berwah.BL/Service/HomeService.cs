@@ -246,6 +246,10 @@ using System.Threading.Tasks;
                 SubCategoryId = dto.SubCategoryId,
                 PickupAddress = dto.PickupAddress,
                 DeliveryAddress = dto.DeliveryAddress,
+                PickupLatitude = dto.PickupLatitude,
+                PickupLongitude = dto.PickupLongitude,
+                DeliveryLatitude = dto.DeliveryLatitude,
+                DeliveryLongitude = dto.DeliveryLongitude,
                 PreferredDate = dto.PreferredDate,
                 PreferredTimeSlot = dto.PreferredTimeSlot,
                 Description = dto.Description,
@@ -272,6 +276,10 @@ using System.Threading.Tasks;
                 Price = r.EstimatedPrice,
                 PickupAddress = r.PickupAddress,
                 DeliveryAddress = r.DeliveryAddress,
+                PickupLatitude = r.PickupLatitude,
+                PickupLongitude = r.PickupLongitude,
+                DeliveryLatitude = r.DeliveryLatitude,
+                DeliveryLongitude = r.DeliveryLongitude,
                 AttachmentUrl = r.AttachmentUrl,
                 TimeAgo = GetTimeAgo(r.CreatedAt)
             }).ToList();
@@ -291,6 +299,10 @@ using System.Threading.Tasks;
                 Price = r.EstimatedPrice,
                 PickupAddress = r.PickupAddress,
                 DeliveryAddress = r.DeliveryAddress,
+                PickupLatitude = r.PickupLatitude,
+                PickupLongitude = r.PickupLongitude,
+                DeliveryLatitude = r.DeliveryLatitude,
+                DeliveryLongitude = r.DeliveryLongitude,
                 AttachmentUrl = r.AttachmentUrl,
                 TimeAgo = GetTimeAgo(r.CreatedAt)
             }).ToList();
@@ -313,6 +325,8 @@ using System.Threading.Tasks;
                 Price = dto.Price,
                 Description = dto.Description,
                 ExecutionPeriod = dto.ExecutionPeriod,
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
                 AttachmentUrl = attachmentUrl,
                 CreatedAt = DateTime.UtcNow
             };
@@ -333,6 +347,8 @@ using System.Threading.Tasks;
                 Price = offer.Price,
                 Description = offer.Description,
                 ExecutionPeriod = offer.ExecutionPeriod,
+                Latitude = offer.Latitude,
+                Longitude = offer.Longitude,
                 AttachmentUrl = offer.AttachmentUrl,
                 CreatedAt = offer.CreatedAt
             };

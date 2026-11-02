@@ -135,6 +135,12 @@ namespace Berwah.DAL.Migrations
                     b.Property<bool>("IsNegotiable")
                         .HasColumnType("bit");
 
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
+
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
 
@@ -364,8 +370,14 @@ namespace Berwah.DAL.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("MerchantStatus")
+                        .HasColumnType("int");
+
                     b.Property<int>("OrderId")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("PickedUpAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
@@ -598,6 +610,12 @@ namespace Berwah.DAL.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
+
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
 
@@ -633,6 +651,12 @@ namespace Berwah.DAL.Migrations
                     b.Property<string>("DeliveryAddress")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<double?>("DeliveryLatitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("DeliveryLongitude")
+                        .HasColumnType("float");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -642,6 +666,12 @@ namespace Berwah.DAL.Migrations
 
                     b.Property<string>("PickupAddress")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<double?>("PickupLatitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("PickupLongitude")
+                        .HasColumnType("float");
 
                     b.Property<DateTime?>("PreferredDate")
                         .HasColumnType("datetime2");

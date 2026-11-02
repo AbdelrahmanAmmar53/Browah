@@ -47,6 +47,9 @@ namespace Berwah.Models.DTO
 
         // اختيارية: قائمة المواصفات أثناء الإنشاء
         // public List<SpecificationItemDto> Specifications { get; set; } = new();
+        /// <summary>Where the seller is, picked on the map by the app (optional).</summary>
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
         public string? Key { get; set; }
         public string? Value { get; set; }
     }

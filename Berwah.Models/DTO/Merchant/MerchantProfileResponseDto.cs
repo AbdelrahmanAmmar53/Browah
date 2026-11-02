@@ -13,6 +13,10 @@ namespace Berwah.Models.DTO.Merchant
         public string StoreDescription { get; set; } = string.Empty;
         public string BranchAddress { get; set; } = string.Empty;
         public string ProfileImageUrl { get; set; } = string.Empty;
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        /// <summary>False until the shop sets its location (couriers then get a default pickup point).</summary>
+        public bool HasLocation { get; set; }
         public bool IsVerified { get; set; } = true; 
 
         // 2. حالة العمل
