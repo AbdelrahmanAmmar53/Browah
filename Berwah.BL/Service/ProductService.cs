@@ -91,13 +91,17 @@ namespace Berwah.BL.Service
                 Name = model.Name.Trim(),
                 Description = string.IsNullOrWhiteSpace(model.Description) ? string.Empty : model.Description.Trim(),
                 Price = model.Price,
-                OriginalPrice = model.OrignalPrice,
+                OriginalPrice = model.OrignalPrice, 
                 IsAvailableForInstantOrder = model.IsAvailableForInstantOrder,
                 IsSpecialOffer = model.IsSpecialOffer,
                 ImageUrl = imageUrl,
                 Stock = model.Stock,
-                MenuSectionId = model.MenuSectionId, 
+                MenuSectionId = model.MenuSectionId,
                 UserId = merchantId,
+
+                Location = model.Location,
+                Condition = model.Condition,
+
                 CreatedAt = DateTime.UtcNow,
                 IsActive = true
             };
