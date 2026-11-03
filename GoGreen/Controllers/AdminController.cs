@@ -31,6 +31,7 @@ namespace Berwah.Controllers
             // الأدمن يحدد الرسوم والنسبة الجديدة
             settings.WithdrawalFeeFixed = model.WithdrawalFeeFixed;
             settings.CompanyCommissionPercentage = model.CompanyCommissionPercentage;
+            if (model.CourierSharePercentage.HasValue) settings.CourierSharePercentage = model.CourierSharePercentage.Value;
 
             await _context.SaveChangesAsync();
 
@@ -41,6 +42,8 @@ namespace Berwah.Controllers
         {
             public decimal WithdrawalFeeFixed { get; set; } 
             public decimal CompanyCommissionPercentage { get; set; }
+            /// <summary>Optional: the captain's share of each order, in percent.</summary>
+            public decimal? CourierSharePercentage { get; set; }
         }
     }
 }

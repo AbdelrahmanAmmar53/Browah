@@ -35,14 +35,51 @@ namespace Berwah.DAL.App
         public DbSet<SystemSetting> SystemSettings { get; set; }
         public DbSet<VisaCard> VisaCards { get; set; }
         public DbSet<Transaction> Transactions { get; set; }
+        public DbSet<OrderIssue> OrderIssues { get; set; }
+        public DbSet<StoreReview> StoreReviews { get; set; }
+        public DbSet<DeviceToken> DeviceTokens { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<ServiceRequest> ServiceRequests { get; set; }
         public DbSet<ServiceOffer> ServiceOffers { get; set; }
         public DbSet<MenuSection> menuSections { get; set; }
+        public DbSet<CartItem> CartItems { get; set; }
+        public DbSet<ServiceOption> ServiceOptions { get; set; }
+        public DbSet<Conversation> Conversations { get; set; }
+        public DbSet<ChatMessage> ChatMessages { get; set; }
+        public DbSet<FavoriteAd> FavoriteAds { get; set; }
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
             builder.Entity<Advertisment>().ToTable("Advertisments");
+            builder.Entity<CartItem>(c =>
+            {
+                c.HasIndex(x => new { x.UserId, x.ProductId }).IsUnique();
+                c.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+                c.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
+            });
+            builder.Entity<Conversation>(c =>
+            {
+                c.HasIndex(x => new { x.Kind, x.RefId, x.UserAId, x.UserBId }).IsUnique();
+                c.HasOne<User>().WithMany().HasForeignKey(x => x.UserAId).OnDelete(DeleteBehavior.NoAction);
+                c.HasOne<User>().WithMany().HasForeignKey(x => x.UserBId).OnDelete(DeleteBehavior.NoAction);
+            });
+            builder.Entity<ChatMessage>(m =>
+            {
+                m.Property(x => x.Text).IsRequired().HasMaxLength(1000);
+                m.HasIndex(x => new { x.ConversationId, x.Id });
+                m.HasOne(x => x.Conversation).WithMany(c => c.Messages).HasForeignKey(x => x.ConversationId).OnDelete(DeleteBehavior.Cascade);
+                m.HasOne<User>().WithMany().HasForeignKey(x => x.SenderId).OnDelete(DeleteBehavior.NoAction);
+            });
+            builder.Entity<FavoriteAd>(f =>
+            {
+                f.HasIndex(x => new { x.UserId, x.AdvertisementId }).IsUnique();
+                f.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            });
+            builder.Entity<ServiceOption>(o =>
+            {
+                o.Property(x => x.Name).IsRequired().HasMaxLength(100);
+                o.HasOne(x => x.SubCategory).WithMany().HasForeignKey(x => x.SubCategoryId).OnDelete(DeleteBehavior.Cascade);
+            });
             builder.Entity<User>(user =>
             {
                 user.HasKey(u => u.Id);
@@ -136,6 +173,7 @@ namespace Berwah.DAL.App
             builder.Entity<SystemSetting>(entity =>
             {
                 entity.Property(s => s.CompanyCommissionPercentage).HasPrecision(18, 2);
+                entity.Property(s => s.CourierSharePercentage).HasPrecision(18, 2);
                 entity.Property(s => s.MaxCashLimitForDelivery).HasPrecision(18, 2);
                 entity.Property(s => s.MinWithdrawalAmount).HasPrecision(18, 2);
                 entity.Property(s => s.WithdrawalFeeFixed).HasPrecision(18, 2);

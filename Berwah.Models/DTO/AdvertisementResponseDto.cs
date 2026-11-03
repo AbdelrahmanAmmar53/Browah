@@ -22,6 +22,8 @@ namespace Berwah.Models.DTO
         public List<string> ImageUrls { get; set; } = new();
         public DateTime CreatedAt { get; set; }
         public int SellerId { get; set; }
+        /// <summary>Pending (under review) / Approved / Rejected / Suspended (frozen).</summary>
+        public string Status { get; set; } = string.Empty;
         public List<SpecificationItemDto> Specifications { get; set; } = new();
     }
 }

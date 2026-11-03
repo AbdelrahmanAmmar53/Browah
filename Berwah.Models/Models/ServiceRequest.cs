@@ -29,6 +29,22 @@ namespace Berwah.Models.Models
         public string? AttachmentUrl { get; set; }
 
         public ServiceRequestStatus Status { get; set; }
+
+        /// <summary>The offer the customer chose; the provider who made it does the job.</summary>
+        public int? AcceptedOfferId { get; set; }
+
+        /// <summary>The choice the customer made inside the service (vehicle type, kind of work).</summary>
+        public int? ServiceOptionId { get; set; }
+        /// <summary>When the provider said the job is done; the customer then confirms.</summary>
+        public DateTime? ProviderDoneAt { get; set; }
+
+        /// <summary>When the customer confirmed the job (the request is Completed from then).</summary>
+        public DateTime? CompletedAt { get; set; }
+
+        /// <summary>The customer's rating of the provider for this job, 1 to 5.</summary>
+        public int? CustomerRating { get; set; }
+        public string? CustomerReview { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

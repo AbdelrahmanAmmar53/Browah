@@ -187,6 +187,36 @@ namespace Berwah.DAL.Migrations
                     b.ToTable("AdvertismentImages");
                 });
 
+            modelBuilder.Entity("Berwah.Models.Models.CartItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("UserId", "ProductId")
+                        .IsUnique();
+
+                    b.ToTable("CartItems");
+                });
+
             modelBuilder.Entity("Berwah.Models.Models.Category", b =>
                 {
                     b.Property<int>("Id")
@@ -205,6 +235,109 @@ namespace Berwah.DAL.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Categories");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.ChatMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ConversationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("SenderId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SenderId");
+
+                    b.HasIndex("ConversationId", "Id");
+
+                    b.ToTable("ChatMessages");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.Conversation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("LastMessageAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RefId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserAId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserBId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserAId");
+
+                    b.HasIndex("UserBId");
+
+                    b.HasIndex("Kind", "RefId", "UserAId", "UserBId")
+                        .IsUnique();
+
+                    b.ToTable("Conversations");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.DeviceToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DeviceTokens");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.Faq", b =>
@@ -226,6 +359,31 @@ namespace Berwah.DAL.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Faqs");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.FavoriteAd", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AdvertisementId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "AdvertisementId")
+                        .IsUnique();
+
+                    b.ToTable("FavoriteAds");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.Image", b =>
@@ -323,17 +481,36 @@ namespace Berwah.DAL.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("CourierAcceptedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CourierRating")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CourierReview")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeliveredAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int?>("DeliveryId")
                         .HasColumnType("int");
+
+                    b.Property<string>("DropoffAddress")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<double>("DropoffLatitude")
                         .HasColumnType("float");
 
                     b.Property<double>("DropoffLongitude")
                         .HasColumnType("float");
+
+                    b.Property<DateTime?>("FirstOfferedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("PaymentMethod")
                         .HasColumnType("int");
@@ -360,6 +537,39 @@ namespace Berwah.DAL.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Orders");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.OrderIssue", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ReporterId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("OrderIssues");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.OrderItem", b =>
@@ -625,6 +835,9 @@ namespace Berwah.DAL.Migrations
                     b.Property<int>("ServiceRequestId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("Withdrawn")
+                        .HasColumnType("bit");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ProviderId");
@@ -632,6 +845,35 @@ namespace Berwah.DAL.Migrations
                     b.HasIndex("ServiceRequestId");
 
                     b.ToTable("ServiceOffers");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.ServiceOption", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SubCategoryId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubCategoryId");
+
+                    b.ToTable("ServiceOptions");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.ServiceRequest", b =>
@@ -642,11 +884,23 @@ namespace Berwah.DAL.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AcceptedOfferId")
+                        .HasColumnType("int");
+
                     b.Property<string>("AttachmentUrl")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("CustomerRating")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CustomerReview")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("DeliveryAddress")
                         .HasColumnType("nvarchar(max)");
@@ -679,6 +933,12 @@ namespace Berwah.DAL.Migrations
                     b.Property<string>("PreferredTimeSlot")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("ProviderDoneAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ServiceOptionId")
+                        .HasColumnType("int");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
@@ -700,6 +960,43 @@ namespace Berwah.DAL.Migrations
                     b.HasIndex("UserId1");
 
                     b.ToTable("ServiceRequests");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.StoreReview", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Comment")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MerchantId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("RepliedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reply")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("StoreReviews");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.SubCategory", b =>
@@ -733,6 +1030,10 @@ namespace Berwah.DAL.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("CompanyCommissionPercentage")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("CourierSharePercentage")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
@@ -854,6 +1155,9 @@ namespace Berwah.DAL.Migrations
                     b.Property<string>("BusinessName")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("BusinessSubCategoryIds")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("BusinessType")
                         .HasColumnType("nvarchar(max)");
 
@@ -869,6 +1173,9 @@ namespace Berwah.DAL.Migrations
 
                     b.Property<string>("DeliveryTimeSpan")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DrivingLicenseExpiry")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("DrivingLicenseImageUrl")
                         .HasColumnType("nvarchar(max)");
@@ -892,6 +1199,9 @@ namespace Berwah.DAL.Migrations
                     b.Property<bool>("IsFrozen")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsUnavailable")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsVerified")
                         .HasColumnType("bit");
 
@@ -905,6 +1215,9 @@ namespace Berwah.DAL.Migrations
 
                     b.Property<double>("Latitude")
                         .HasColumnType("float");
+
+                    b.Property<int>("LicenseReminderStage")
+                        .HasColumnType("int");
 
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("bit");
@@ -932,6 +1245,9 @@ namespace Berwah.DAL.Migrations
                     b.Property<string>("PasswordHash")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("PausedUntil")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
                         .HasMaxLength(15)
@@ -951,6 +1267,9 @@ namespace Berwah.DAL.Migrations
 
                     b.Property<double>("Rating")
                         .HasColumnType("float");
+
+                    b.Property<int>("ReleasedOrdersCount")
+                        .HasColumnType("int");
 
                     b.Property<string>("SecondName")
                         .IsRequired()
@@ -982,6 +1301,9 @@ namespace Berwah.DAL.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("VehicleImageUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("VehiclePlateNumber")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("VehicleType")
@@ -1227,6 +1549,66 @@ namespace Berwah.DAL.Migrations
                     b.Navigation("Image");
                 });
 
+            modelBuilder.Entity("Berwah.Models.Models.CartItem", b =>
+                {
+                    b.HasOne("Berwah.Models.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Berwah.Models.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.ChatMessage", b =>
+                {
+                    b.HasOne("Berwah.Models.Models.Conversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Berwah.Models.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.Conversation", b =>
+                {
+                    b.HasOne("Berwah.Models.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserAId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Berwah.Models.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserBId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.FavoriteAd", b =>
+                {
+                    b.HasOne("Berwah.Models.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Berwah.Models.Models.Image", b =>
                 {
                     b.HasOne("Berwah.Models.Models.User", "User")
@@ -1367,6 +1749,17 @@ namespace Berwah.DAL.Migrations
                     b.Navigation("ServiceRequest");
                 });
 
+            modelBuilder.Entity("Berwah.Models.Models.ServiceOption", b =>
+                {
+                    b.HasOne("Berwah.Models.Models.SubCategory", "SubCategory")
+                        .WithMany()
+                        .HasForeignKey("SubCategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SubCategory");
+                });
+
             modelBuilder.Entity("Berwah.Models.Models.ServiceRequest", b =>
                 {
                     b.HasOne("Berwah.Models.Models.SubCategory", "SubCategory")
@@ -1501,6 +1894,11 @@ namespace Berwah.DAL.Migrations
                     b.Navigation("Advertisments");
 
                     b.Navigation("SubCategories");
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.Conversation", b =>
+                {
+                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.Image", b =>

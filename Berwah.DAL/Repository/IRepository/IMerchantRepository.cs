@@ -15,6 +15,8 @@ namespace Berwah.DAL.Repository.IRepository
         Task UpdateOrderAsync(Order order);
         Task UpdateMerchantAsync(User merchant);
         Task RecordMerchantPenaltyTransactionAsync(int merchantId, decimal penaltyAmount, string reason);
+        Task<List<User>> GetActiveCouriersAsync();
+        Task RecordTransactionAsync(int userId, decimal amount, string type, string description);
         Task<int> GetActiveProductsCountAsync(int merchantId);
         Task<IEnumerable<User>> GetMerchantsByBusinessTypeAsync(string businessType);
         /// <summary>Merchants whose BusinessType is one of <paramref name="types"/> (trimmed, case-insensitive).</summary>

@@ -13,9 +13,11 @@ namespace Berwah.BL.Service
     public class SupervisorForAdService : ISupervisorForAdService
     {
         private readonly ISupervisorForAdRepository _supervisorRepo;
+        private readonly INotificationService _notifications;
 
-        public SupervisorForAdService(ISupervisorForAdRepository     supervisorRepo)
+        public SupervisorForAdService(ISupervisorForAdRepository     supervisorRepo, INotificationService notifications)
         {
+            _notifications = notifications;
             _supervisorRepo = supervisorRepo;
         }
 
@@ -54,7 +56,20 @@ namespace Berwah.BL.Service
             if (ad == null) return false;
 
             ad.Status = status;
-            return await _supervisorRepo.UpdateAsync(ad);
+            var ok = await _supervisorRepo.UpdateAsync(ad);
+            if (ok)
+            {
+                var (title, msg) = status switch
+                {
+                    AdStatus.Approved => ("تم اعتماد إعلانك ✅", $"إعلانك «{ad.Title}» أصبح منشورًا الآن."),
+                    AdStatus.Rejected => ("تم رفض إعلانك", $"للأسف تم رفض إعلانك «{ad.Title}». يمكنك تعديله وإعادة نشره."),
+                    AdStatus.Suspended => ("تم تجميد إعلانك", $"تم تجميد إعلانك «{ad.Title}» مؤقتًا."),
+                    _ => ("", "")
+                };
+                if (title.Length > 0)
+                    try { await _notifications.SendNotificationAsync(new SendNotification { UserId = ad.UserId, Title = title, Message = msg }); } catch { }
+            }
+            return ok;
         }
     }
 }

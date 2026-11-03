@@ -172,6 +172,79 @@ namespace Berwah.Controllers
         }
 
 
+        /// <summary>Home search: products, approved ads and stores whose name matches the text.</summary>
+        [HttpGet("search")]
+        public async Task<IActionResult> Search([FromQuery] string? q, [FromQuery] int take = 20)
+        {
+            q = (q ?? "").Trim();
+            if (q.Length < 2)
+                return Ok(new { status = "success", data = new { products = new object[0], ads = new object[0], merchants = new object[0], categories = new object[0] } });
+            if (take < 1 || take > 50) take = 20;
+
+            var products = await _context.Products
+                .Where(p => p.IsActive && !p.User.IsFrozen
+                    && (p.Name.Contains(q) || p.Description.Contains(q)))
+                .OrderByDescending(p => p.CreatedAt)
+                .Take(take)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Name,
+                    Price = p.Price,
+                    DiscountedPrice = p.Discount != null && p.Discount > 0 ? (decimal?)(p.Price - p.Discount.Value) : null,
+                    p.Currency,
+                    p.ImageUrl,
+                    MerchantId = p.UserId,
+                    SellerName = p.User.BusinessName,
+                    MerchantType = p.User.BusinessType,
+                    InStock = p.Stock > 0
+                })
+                .ToListAsync();
+
+            var ads = await _context.Advertisements
+                .Where(a => a.IsActive && a.Status == Berwah.Models.Enum.AdStatus.Approved
+                    && (a.Title.Contains(q) || a.Description.Contains(q)))
+                .OrderByDescending(a => a.CreatedAt)
+                .Take(take)
+                .Select(a => new
+                {
+                    a.Id,
+                    a.Title,
+                    a.Price,
+                    a.City,
+                    a.Governorate,
+                    ImageUrl = a.AdvertismentImages.Select(i => i.Image!.Url).FirstOrDefault()
+                })
+                .ToListAsync();
+
+            var merchants = await _context.Users
+                .Where(u => u.BusinessName != null && !u.IsFrozen && u.BusinessName.Contains(q))
+                .Take(take)
+                .Select(u => new
+                {
+                    MerchantId = u.Id,
+                    BusinessName = u.BusinessName,
+                    BusinessType = u.BusinessType,
+                    ImageUrl = u.ProfileImageUrl
+                })
+                .ToListAsync();
+
+            // Sections and sub-sections by name, so "خدمات" or "موبايلات" lead straight to them.
+            var categories = await _context.Categories
+                .Where(c => c.Name.Contains(q))
+                .Take(take)
+                .Select(c => new { c.Id, c.Name, ParentName = (string?)null })
+                .ToListAsync();
+            var subs = await _context.SubCategories
+                .Where(s => s.Name.Contains(q))
+                .Take(take)
+                .Select(s => new { Id = s.CategoryId, s.Name, ParentName = (string?)s.Category.Name })
+                .ToListAsync();
+            categories.AddRange(subs);
+
+            return Ok(new { status = "success", data = new { products, ads, merchants, categories } });
+        }
+
         [HttpGet("{id}/content")]
         public async Task<IActionResult> GetCategoryContent(int id, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {

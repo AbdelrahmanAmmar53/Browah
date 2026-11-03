@@ -13,9 +13,11 @@ namespace Berwah.BL.Service
     public class NotificationService: INotificationService
     {
         private readonly INotificationRepository _notificationRepository;
-        public NotificationService(INotificationRepository notificationRepository)
+        private readonly INotificationPusher? _pusher;
+        public NotificationService(INotificationRepository notificationRepository, INotificationPusher? pusher = null)
         {
             _notificationRepository = notificationRepository;
+            _pusher = pusher;
         }
         public async Task<IEnumerable<NotificationHistory>> GetNotificationHistoryAsync(int userId)
         {
@@ -38,6 +40,18 @@ namespace Berwah.BL.Service
                 CreatedAt = DateTime.UtcNow
             };
             await _notificationRepository.CreateNotificationAsync(notification);
+
+            // Real time: the app that is open gets it now; the stored copy is for the list.
+            if (_pusher != null)
+            {
+                await _pusher.PushAsync(notification.UserId, new
+                {
+                    id = notification.Id,
+                    title = notification.Title,
+                    message = notification.Message,
+                    createdAt = notification.CreatedAt
+                });
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using Berwah.BL.Service.IService;
+using Berwah.DAL.App;
 using Berwah.DAL.Repository.IRepository;
 using Berwah.Models.DTO;
 using Berwah.Models.DTO.Merchant;
@@ -19,11 +20,22 @@ using System.Threading.Tasks;
             private readonly IHomeRepository _homeRepository;
             private readonly IImageService _imageService;
 
-        public HomeService(IHomeRepository homeRepository, IImageService imageService)
+        private readonly INotificationService _notifications;
+        private readonly ApplicationDbContext _db;
+
+        public HomeService(IHomeRepository homeRepository, IImageService imageService, INotificationService notifications, ApplicationDbContext db)
             {
                 _homeRepository = homeRepository;
                 _imageService = imageService;
+                _notifications = notifications;
+                _db = db;
             }
+        private async Task SafeNotifyAsync(int userId, string title, string message)
+        {
+            try { await _notifications.SendNotificationAsync(new SendNotification { UserId = userId, Title = title, Message = message }); }
+            catch { /* a failed notification must never fail the action */ }
+        }
+
 
         public async Task<HomeDto> GetHomeDataAsync(string? userId)
         {
@@ -244,6 +256,7 @@ using System.Threading.Tasks;
             {
                 UserId = userId,
                 SubCategoryId = dto.SubCategoryId,
+                ServiceOptionId = dto.ServiceOptionId,
                 PickupAddress = dto.PickupAddress,
                 DeliveryAddress = dto.DeliveryAddress,
                 PickupLatitude = dto.PickupLatitude,
@@ -262,13 +275,25 @@ using System.Threading.Tasks;
             return await _homeRepository.AddServiceRequestAsync(serviceRequest);
         }
 
+        /// <summary>Fills each request's option name (vehicle type, kind of work) in one query.</summary>
+        private async Task<IEnumerable<ServiceRequestDto>> WithOptionNamesAsync(List<ServiceRequestDto> list)
+        {
+            var ids = list.Where(r => r.ServiceOptionId != null).Select(r => r.ServiceOptionId!.Value).Distinct().ToList();
+            if (ids.Count == 0) return list;
+            var names = await _db.ServiceOptions.Where(o => ids.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.Name);
+            foreach (var r in list)
+                if (r.ServiceOptionId != null && names.TryGetValue(r.ServiceOptionId.Value, out var n)) r.ServiceOptionName = n;
+            return list;
+        }
+
         public async Task<IEnumerable<ServiceRequestDto>> GetAvailableRequestsForProvidersAsync(int? subCategoryId)
         {
             var requests = await _homeRepository.GetAvailableServiceRequestsAsync(subCategoryId);
 
-            return requests.Select(r => new ServiceRequestDto
+            var list = requests.Select(r => new ServiceRequestDto
             {
                 Id = r.Id,
+                ServiceOptionId = r.ServiceOptionId,
                 ClientName = r.User != null ? $"{r.User.FirstName} {r.User.LastName}" : "عميل برواح",
                 ClientImage = r.User?.Images?.FirstOrDefault()?.Url ?? "",
                 CategoryName = r.SubCategory?.Name ?? "", 
@@ -283,15 +308,17 @@ using System.Threading.Tasks;
                 AttachmentUrl = r.AttachmentUrl,
                 TimeAgo = GetTimeAgo(r.CreatedAt)
             }).ToList();
+            return await WithOptionNamesAsync(list);
         }
 
         public async Task<IEnumerable<ServiceRequestDto>> GetAllServiceRequestsAsync()
         {
             var requests = await _homeRepository.GetAllServiceRequestsAsync();
 
-            return requests.Select(r => new ServiceRequestDto
+            var list = requests.Select(r => new ServiceRequestDto
             {
                 Id = r.Id,
+                ServiceOptionId = r.ServiceOptionId,
                 ClientName = r.User != null ? $"{r.User.FirstName} {r.User.LastName}" : "عميل برواح",
                 ClientImage = r.User?.Images?.FirstOrDefault()?.Url ?? "",
                 CategoryName = r.SubCategory?.Name ?? "",
@@ -306,6 +333,7 @@ using System.Threading.Tasks;
                 AttachmentUrl = r.AttachmentUrl,
                 TimeAgo = GetTimeAgo(r.CreatedAt)
             }).ToList();
+            return await WithOptionNamesAsync(list);
         }
 
         public async Task<ServiceOfferResponseDto> SubmitOfferAsync(CreateServiceOfferDto dto, int providerId)
@@ -333,6 +361,10 @@ using System.Threading.Tasks;
 
             await _homeRepository.AddAsync(offer);
             await _homeRepository.SaveChangesAsync();
+
+            var ownerId = await _db.ServiceRequests.Where(r => r.Id == offer.ServiceRequestId).Select(r => (int?)r.UserId).FirstOrDefaultAsync();
+            if (ownerId != null)
+                await SafeNotifyAsync(ownerId.Value, "وصلك عرض جديد 💼", $"قدّم مقدم خدمة عرضًا بسعر {offer.Price:0.##} ج.م على طلبك #{offer.ServiceRequestId}. افتح طلباتي لمراجعته.");
 
             return MapToOfferResponseDto(offer);
         }

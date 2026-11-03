@@ -10,6 +10,7 @@ namespace Berwah.Models.DTO.Service
     public class CreateServiceRequest
     {
         public int SubCategoryId { get; set; }
+        public int? ServiceOptionId { get; set; }
         public string? PickupAddress { get; set; }
         public string? DeliveryAddress { get; set; }
         // The two places as picked on the map by the app (optional).

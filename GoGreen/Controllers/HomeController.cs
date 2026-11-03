@@ -1,4 +1,6 @@
 ﻿using Berwah.BL.Service.IService;
+using Berwah.DAL.App;
+using Microsoft.EntityFrameworkCore;
 using Berwah.Models.DTO;
 using Berwah.Models.DTO.Service;
 using Microsoft.AspNetCore.Authorization;
@@ -13,9 +15,11 @@ namespace Berwah.Controllers
     public class HomeController : ControllerBase
     {
         private readonly IHomeService _homeService;
-        public HomeController(IHomeService homeService)
+        private readonly ApplicationDbContext _db;
+        public HomeController(IHomeService homeService, ApplicationDbContext db)
         {
             _homeService = homeService;
+            _db = db;
         }
 
         [Authorize]
@@ -89,7 +93,19 @@ namespace Berwah.Controllers
         [HttpGet("available-service-requests")]
         public async Task<IActionResult> GetAvailableServiceRequests([FromQuery] int? subCategoryId)
         {
-            var requests = await _homeService.GetAvailableRequestsForProvidersAsync(subCategoryId);
+            var requests = (await _homeService.GetAvailableRequestsForProvidersAsync(subCategoryId)).ToList();
+
+            // Mark the requests this account already offered on, so a refresh keeps showing it.
+            if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var me) && requests.Count > 0)
+            {
+                var ids = requests.Select(r => r.Id).ToList();
+                var mine = await _db.ServiceOffers.AsNoTracking()
+                    .Where(o => o.ProviderId == me && ids.Contains(o.ServiceRequestId))
+                    .Select(o => o.ServiceRequestId).Distinct().ToListAsync();
+                var set = mine.ToHashSet();
+                foreach (var r in requests) r.HasMyOffer = set.Contains(r.Id);
+            }
+
             return Ok(new { status = "success", data = requests });
         }
 
@@ -110,6 +126,9 @@ namespace Berwah.Controllers
             {
                 return Unauthorized(new { status = "fail", message = "غير مصرح لك بالوصول" });
             }
+
+            if (await _db.ServiceOffers.AnyAsync(o => o.ServiceRequestId == dto.ServiceRequestId && o.ProviderId == providerId))
+                return BadRequest(new { status = "error", message = "قدمت عرضًا على هذا الطلب من قبل" });
 
             try
             {

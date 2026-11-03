@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
+using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
 
 namespace Berwah.Models.DTO
@@ -31,5 +32,12 @@ namespace Berwah.Models.DTO
         /// <summary>Where the shop is, picked by the app (optional). Used as the courier's pickup point.</summary>
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
+
+        /// <summary>Comma-separated sub-category ids (e.g. "1009,1010"): the cuisines / sections the store belongs to.</summary>
+        public string? SubCategoryIds { get; set; }
+
+        /// <summary>Store picture picked at sign-up (uploaded before the OTP step; only the URL is kept).</summary>
+        public IFormFile? ProfileImage { get; set; }
+        public string? ProfileImageUrl { get; set; }
     }
 }

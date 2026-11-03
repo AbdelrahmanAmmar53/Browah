@@ -13,5 +13,7 @@ namespace Berwah.Models.DTO
         public string TransactionDate { get; set; }
         public decimal TotalPrice { get; set; }
         public string Status { get; set; } 
+        /// <summary>"Order" for a placed order, "Refund" for money returned to the customer.</summary>
+        public string Type { get; set; } = "Order";
     }
 }

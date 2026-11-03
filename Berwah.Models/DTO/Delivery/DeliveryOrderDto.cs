@@ -24,6 +24,8 @@ namespace Berwah.Models.DTO.Delivery
         public string DropoffTitle { get; set; } = string.Empty; 
         public string DropoffAddress { get; set; } = string.Empty; 
         public string DropoffDistance { get; set; } = string.Empty; 
+        public double? DropoffLatitude { get; set; }
+        public double? DropoffLongitude { get; set; }
 
         // ملاحظات الدفع أو الاستلام
         public string PaymentNote { get; set; } = string.Empty; 

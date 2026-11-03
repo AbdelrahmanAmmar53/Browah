@@ -18,5 +18,6 @@ namespace Berwah.Models.DTO.Merchant
         public string? WorkHours { get; set; } = string.Empty;
         public decimal? Rating { get; set; }
         public int? ReviewsCount { get; set; }
+        public List<int> SubCategoryIds { get; set; } = new();
     }
 }

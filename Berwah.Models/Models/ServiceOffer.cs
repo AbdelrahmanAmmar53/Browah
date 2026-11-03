@@ -21,6 +21,8 @@ namespace Berwah.Models.Models
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
         public string? AttachmentUrl { get; set; }
+        /// <summary>The provider backed out after being chosen, or the customer changed provider: the offer is no longer on the table.</summary>
+        public bool Withdrawn { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

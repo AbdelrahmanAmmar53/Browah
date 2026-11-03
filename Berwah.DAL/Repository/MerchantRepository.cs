@@ -30,6 +30,7 @@ namespace Berwah.DAL.Repository
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
                 .Include(o => o.User)
+                .Include(o => o.Delivery)
                 .Where(o => o.OrderItems.Any(oi => oi.Product.UserId == merchantId))
                 .OrderByDescending(o => o.CreatedAt)
                 .ToListAsync();
@@ -40,6 +41,7 @@ namespace Berwah.DAL.Repository
             return await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p.User)
                 .Include(o => o.User)
                 .FirstOrDefaultAsync(o => o.Id == orderId && o.OrderItems.Any(oi => oi.Product.UserId == merchantId));
         }
@@ -68,6 +70,27 @@ namespace Berwah.DAL.Repository
             };
 
             await _context.Transactions.AddAsync(transaction);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<List<User>> GetActiveCouriersAsync()
+        {
+            return await _context.Users
+                .AsNoTracking()
+                .Where(u => u.UserType == UserType.Delivery && !u.IsFrozen)
+                .ToListAsync();
+        }
+
+        public async Task RecordTransactionAsync(int userId, decimal amount, string type, string description)
+        {
+            await _context.Transactions.AddAsync(new Transaction
+            {
+                UserId = userId,
+                Amount = amount,
+                Type = type,
+                Description = description,
+                CreatedAt = DateTime.UtcNow
+            });
             await _context.SaveChangesAsync();
         }
 

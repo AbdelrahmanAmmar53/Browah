@@ -76,9 +76,10 @@ namespace Berwah.BL.Service
                         MerchantImageUrl = m.ProfileImageUrl ?? m.Images?.FirstOrDefault()?.Url,
                         Address = m.Address ?? string.Empty,
                         // Closed stores are listed too, flagged closed (the merchant toggles IsFrozen).
-                        IsOpen = !m.IsFrozen,
+                        IsOpen = !m.IsFrozen && !m.IsPaused,
                         WorkHours = m.WorkHours,
-                        Rating = m.Rating > 0 ? (decimal?)m.Rating : null
+                        Rating = m.Rating > 0 ? (decimal?)m.Rating : null,
+                        SubCategoryIds = ParseIds(m.BusinessSubCategoryIds)
                     }).Cast<object>().ToList();
                     break;
 
@@ -140,6 +141,12 @@ namespace Berwah.BL.Service
 
             return ads.Select(MapToResponseDto).ToList();
         }
+
+        private static List<int> ParseIds(string? csv) =>
+            string.IsNullOrWhiteSpace(csv)
+                ? new List<int>()
+                : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                     .Select(x => int.TryParse(x, out var n) ? n : 0).Where(n => n > 0).Distinct().ToList();
 
         private AdvertisementResponseDto MapToResponseDto(Advertisment ad)
         {

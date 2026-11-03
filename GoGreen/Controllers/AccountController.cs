@@ -203,6 +203,16 @@ namespace Berwah.Controllers
         {
             try
             {
+                // The store picture is uploaded now; only its URL travels with the pending sign-up.
+                model.ProfileImageUrl = null;
+                if (model.ProfileImage != null && model.ProfileImage.Length > 0)
+                {
+                    var res = await _imageService.UploadImageAsync(model.ProfileImage);
+                    if (res != null && !string.IsNullOrEmpty(res.SecureUrl?.ToString()))
+                        model.ProfileImageUrl = res.SecureUrl.ToString();
+                }
+                model.ProfileImage = null;
+
                 return await ProcessRegistrationAsync(model, model.Email, model.PhoneNumber, model.Password, model.ConfirmPassword, UserType.Merchant, "رمز تأكيد إنشاء حساب تاجر");
             }
             catch (Exception ex)
@@ -366,9 +376,15 @@ namespace Berwah.Controllers
                     user.MinimumOrder = merchantDto.MinimumOrder;
                     user.WorkHours = merchantDto.WorkHours?.Trim();
                     user.AcceptOrdersAutomatically = merchantDto.AcceptOrdersAutomatically;
+                    user.BusinessSubCategoryIds = string.IsNullOrWhiteSpace(merchantDto.SubCategoryIds)
+                        ? null
+                        : string.Join(",", merchantDto.SubCategoryIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                            .Select(x => int.TryParse(x, out var n) ? n : 0).Where(n => n > 0).Distinct());
+                    if (!string.IsNullOrEmpty(merchantDto.ProfileImageUrl))
+                        user.ProfileImageUrl = merchantDto.ProfileImageUrl;
 
-                    if (merchantDto.Latitude.HasValue && merchantDto.Longitude.HasValue)
-                        //&& Berwah.BL.Service.MerchantService.IsValidLocation(merchantDto.Latitude.Value, merchantDto.Longitude.Value))
+                    if (merchantDto.Latitude.HasValue && merchantDto.Longitude.HasValue
+                        && Berwah.BL.Service.MerchantService.IsValidLocation(merchantDto.Latitude.Value, merchantDto.Longitude.Value))
                     {
                         user.Latitude = merchantDto.Latitude.Value;
                         user.Longitude = merchantDto.Longitude.Value;
@@ -976,14 +992,29 @@ namespace Berwah.Controllers
                     .OrderByDescending(o => o.CreatedAt)
                     .ToListAsync();
 
-                var result = orders.Select(o => new UserTransactionDto
+                var orderRows = orders.Select(o => (o.CreatedAt, Row: new UserTransactionDto
                 {
                     OrderId = o.Id,
                     Title = $"طلب منتجات أو خدمات #{o.Id}",
                     Status = o.ConditionStaus ?? "قيد المعالجة",
                     TotalPrice = (decimal)o.TotalPrice,
                     TransactionDate = o.CreatedAt.ToString("yyyy-MM-dd hh:mm tt")
-                }).ToList();
+                }));
+
+                var refunds = await _context.Transactions
+                    .Where(t => t.UserId == userId && t.Type == "Refund")
+                    .ToListAsync();
+                var refundRows = refunds.Select(t => (t.CreatedAt, Row: new UserTransactionDto
+                {
+                    OrderId = -t.Id,
+                    Title = t.Description,
+                    Status = "تم الاسترداد",
+                    Type = "Refund",
+                    TotalPrice = t.Amount,
+                    TransactionDate = t.CreatedAt.ToString("yyyy-MM-dd hh:mm tt")
+                }));
+
+                var result = orderRows.Concat(refundRows).OrderByDescending(x => x.CreatedAt).Select(x => x.Row).ToList();
 
                 return Ok(new { status = "success", data = result });
             }

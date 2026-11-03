@@ -23,9 +23,11 @@ namespace Berwah.BL.Service
         private readonly IProductRepository _repo;
         private readonly ILogger<ProductService> _logger;
         private readonly IImageService _imageService;
+        private readonly INotificationService _notifications;
 
-        public ProductService(IProductRepository repo, ILogger<ProductService> logger, IImageService imageService)
+        public ProductService(IProductRepository repo, ILogger<ProductService> logger, IImageService imageService, INotificationService notifications)
         {
+            _notifications = notifications;
             _repo = repo;
             _logger = logger;
             _imageService = imageService;
@@ -107,6 +109,7 @@ namespace Berwah.BL.Service
             };
 
             var savedProduct = await _repo.AddAsync(product, ct);
+            try { await _notifications.SendNotificationAsync(new SendNotification { UserId = merchantId, Title = "تمت إضافة المنتج ✅", Message = $"تم نشر المنتج «{savedProduct.Name}» في متجرك." }); } catch { }
 
             return new ProductDto(
                 savedProduct.Id,

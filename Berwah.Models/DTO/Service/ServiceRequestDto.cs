@@ -12,6 +12,8 @@ namespace Berwah.Models.DTO.Service
         public string ClientName { get; set; } = string.Empty;
         public string ClientImage { get; set; } = string.Empty;
         public string CategoryName { get; set; } = string.Empty; 
+        public int? ServiceOptionId { get; set; }
+        public string ServiceOptionName { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public decimal Price { get; set; }
         public string? PickupAddress { get; set; }
@@ -22,5 +24,7 @@ namespace Berwah.Models.DTO.Service
         public double? DeliveryLongitude { get; set; }
         public string? AttachmentUrl { get; set; }
         public string TimeAgo { get; set; } = string.Empty;
+        /// <summary>True when the signed-in account already made an offer on this request.</summary>
+        public bool HasMyOffer { get; set; }
     }
 }

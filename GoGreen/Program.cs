@@ -34,6 +34,10 @@ builder.Services.AddSingleton<IUserService, UserService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddHostedService<Berwah.Services.ServiceJobAutoConfirm>();
+builder.Services.AddHostedService<Berwah.Services.CaptainLicenseReminder>();
+builder.Services.AddSingleton<Berwah.Services.FcmSender>();
+builder.Services.AddSingleton<INotificationPusher, Berwah.Services.SignalRNotificationPusher>();
 builder.Services.AddScoped<ISupporterService, SupporterService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IHomeService, HomeService>();
@@ -91,6 +95,17 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings.GetValue<string>("Audience"),
         IssuerSigningKey = new SymmetricSecurityKey(key),
         ClockSkew = TimeSpan.Zero
+    };
+    // SignalR cannot set a header from the app's websocket: it sends the token in the query.
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var token = context.Request.Query["access_token"];
+            if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/notificationHub"))
+                context.Token = token;
+            return Task.CompletedTask;
+        }
     };
 });
 
@@ -169,6 +184,7 @@ app.MapGet("/", context =>
 app.UseHttpsRedirection();
 app.UseRouting();
 app.UseCors("AllowFrontend");
+app.UseMiddleware<Berwah.Localization.EnglishResponseMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -176,6 +192,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapHub<OrderHub>("/orderHub");
+app.MapHub<NotificationHub>("/notificationHub").RequireAuthorization();
 app.MapHub<Berwah.Hubs.ChatHub>("/chatHub");
 
 app.Run();

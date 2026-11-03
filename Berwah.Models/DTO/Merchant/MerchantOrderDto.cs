@@ -11,5 +11,8 @@
         public string StatusBadgeText { get; set; } = string.Empty;
         public List<MerchantOrderItemDto> Items { get; set; } = new();
         public string PaymentMethod { get; set; } = string.Empty;
+        /// <summary>The courier who took the order, once there is one.</summary>
+        public string? CaptainName { get; set; }
+        public bool HasCaptain { get; set; }
     }
 }

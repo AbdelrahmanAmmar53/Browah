@@ -16,9 +16,11 @@ namespace Berwah.BL.Service
     {
         private readonly IAdvertisementRepository _adRepository;
         private readonly IImageService _imageService; 
+        private readonly INotificationService _notifications;
 
-        public AdvertisementService(IAdvertisementRepository adRepository, IImageService imageService)
+        public AdvertisementService(IAdvertisementRepository adRepository, IImageService imageService, INotificationService notifications)
         {
+            _notifications = notifications;
             _adRepository = adRepository;
             _imageService = imageService;
         }
@@ -88,6 +90,8 @@ namespace Berwah.BL.Service
                 ad.Specifications.Add(spec);
             }
 
+            try { await _notifications.SendNotificationAsync(new SendNotification { UserId = userId, Title = "تم استلام إعلانك", Message = $"إعلانك «{ad.Title}» قيد المراجعة وسيصلك إشعار عند اعتماده." }); } catch { }
+
             return MapToResponseDto(ad);
         }
         public async Task<AdvertisementResponseDto?> GetByIdAsync(int id)
@@ -145,6 +149,7 @@ namespace Berwah.BL.Service
                 IsNegotiable = ad.IsNegotiable,
                 Condition = ad.Condition.ToString(),
                 SellerId= ad.UserId,
+                Status = ad.Status.ToString(),
                 Governorate = ad.Governorate,
                 City = ad.City,
                 CategoryId = ad.CategoryId,
