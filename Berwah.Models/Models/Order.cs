@@ -26,7 +26,7 @@ namespace Berwah.Models.Models
         // --- إحداثيات موقع التسليم (العميل) ---
         public double DropoffLatitude { get; set; }
         public double DropoffLongitude { get; set; }
-        public string DropoffAddress { get; set; }
+        public string? DropoffAddress { get; set; }
         // The customer's rating of the courier after delivery (1-5).
         // When the order first showed on the couriers' radar, when a courier took it, when it was delivered (UTC).
         public DateTime? FirstOfferedAt { get; set; }

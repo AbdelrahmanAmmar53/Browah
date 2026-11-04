@@ -987,38 +987,69 @@ namespace Berwah.Controllers
             {
                 var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+                // 1. جلب بيانات الطلبات المحددة فقط وتفادي مشكلة الـ Nulls في الجدول
                 var orders = await _context.Orders
+                    .AsNoTracking()
                     .Where(o => o.UserId == userId)
+                    .Select(o => new
+                    {
+                        o.Id,
+                        o.ConditionStaus,
+                        o.TotalPrice,
+                        o.CreatedAt
+                    })
                     .OrderByDescending(o => o.CreatedAt)
                     .ToListAsync();
 
-                var orderRows = orders.Select(o => (o.CreatedAt, Row: new UserTransactionDto
-                {
-                    OrderId = o.Id,
-                    Title = $"طلب منتجات أو خدمات #{o.Id}",
-                    Status = o.ConditionStaus ?? "قيد المعالجة",
-                    TotalPrice = (decimal)o.TotalPrice,
-                    TransactionDate = o.CreatedAt.ToString("yyyy-MM-dd hh:mm tt")
-                }));
+                var orderRows = orders.Select(o => (
+                    CreatedAt: o.CreatedAt,
+                    Row: new UserTransactionDto
+                    {
+                        OrderId = o.Id,
+                        Title = $"طلب منتجات أو خدمات #{o.Id}",
+                        Status = string.IsNullOrEmpty(o.ConditionStaus) ? "قيد المعالجة" : o.ConditionStaus,
+                        Type = "Order",
+                        TotalPrice = (decimal)o.TotalPrice,
+                        TransactionDate = o.CreatedAt.ToString("yyyy-MM-dd hh:mm tt")
+                    }
+                ));
 
-                var refunds = await _context.Transactions
+                // 2. جلب الحركات المالية (Refunds)
+                var transactions = await _context.Transactions
+                    .AsNoTracking()
                     .Where(t => t.UserId == userId && t.Type == "Refund")
+                    .Select(t => new
+                    {
+                        t.Id,
+                        t.Description,
+                        t.Amount,
+                        t.CreatedAt
+                    })
                     .ToListAsync();
-                var refundRows = refunds.Select(t => (t.CreatedAt, Row: new UserTransactionDto
-                {
-                    OrderId = -t.Id,
-                    Title = t.Description,
-                    Status = "تم الاسترداد",
-                    Type = "Refund",
-                    TotalPrice = t.Amount,
-                    TransactionDate = t.CreatedAt.ToString("yyyy-MM-dd hh:mm tt")
-                }));
 
-                var result = orderRows.Concat(refundRows).OrderByDescending(x => x.CreatedAt).Select(x => x.Row).ToList();
+                var refundRows = transactions.Select(t => (
+                    CreatedAt: t.CreatedAt,
+                    Row: new UserTransactionDto
+                    {
+                        OrderId = -t.Id,
+                        Title = string.IsNullOrEmpty(t.Description) ? "استرداد أموال" : t.Description,
+                        Status = "تم الاسترداد",
+                        Type = "Refund",
+                        TotalPrice = t.Amount,
+                        TransactionDate = t.CreatedAt.ToString("yyyy-MM-dd hh:mm tt")
+                    }
+                ));
+
+                // 3. الدمج والتنظيم النهائي
+                var result = orderRows
+                    .Concat(refundRows)
+                    .OrderByDescending(x => x.CreatedAt)
+                    .Select(x => x.Row)
+                    .ToList();
 
                 return Ok(new { status = "success", data = result });
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }

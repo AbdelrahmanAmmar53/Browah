@@ -500,7 +500,6 @@ namespace Berwah.DAL.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("DropoffAddress")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<double>("DropoffLatitude")
