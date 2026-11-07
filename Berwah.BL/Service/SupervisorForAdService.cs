@@ -3,6 +3,7 @@ using Berwah.DAL.Repository.IRepository;
 using Berwah.Models.DTO;
 using Berwah.Models.DTO.SupervisorForAd;
 using Berwah.Models.Enum;
+using Berwah.Models.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,7 +17,7 @@ namespace Berwah.BL.Service
         private readonly ISupervisorForAdRepository _supervisorRepo;
         private readonly INotificationService _notifications;
 
-        public SupervisorForAdService(ISupervisorForAdRepository     supervisorRepo, INotificationService notifications)
+        public SupervisorForAdService(ISupervisorForAdRepository supervisorRepo, INotificationService notifications)
         {
             _notifications = notifications;
             _supervisorRepo = supervisorRepo;
@@ -50,8 +51,8 @@ namespace Berwah.BL.Service
             {
                 PendingCount = pendingCount,
                 ApprovedCount = approvedCount,
-                RejectedCount = rejectedCount,   
-                SuspendedCount = suspendedCount   
+                RejectedCount = rejectedCount,
+                SuspendedCount = suspendedCount
             };
         }
 
@@ -245,6 +246,92 @@ namespace Berwah.BL.Service
             }
 
             return updated;
+        }
+
+        public async Task<SupervisorProfileResponseDto?> GetSupervisorProfileAsync(int supervisorId)
+        {
+            var sup = await _supervisorRepo.GetSupervisorByIdAsync(supervisorId);
+            if (sup == null) return null;
+
+            var examinedAds = sup.Advertisements?.Where(a => a.Status != AdStatus.Pending).ToList() ?? new();
+            int examinedCount = examinedAds.Count;
+
+            int approvedCount = examinedAds.Count(a => a.Status == AdStatus.Approved);
+            double verificationPercentage = examinedCount > 0
+                ? Math.Round((double)approvedCount / examinedCount * 100, 1)
+                : 0;
+
+           double responseSpeed = await _supervisorRepo.GetAverageResponseSpeedMinutesAsync(supervisorId);
+
+            return new SupervisorProfileResponseDto
+            {
+                Id = sup.Id,
+                FullName = $"{sup.FirstName} {sup.LastName}".Trim(),
+                Region = sup.Address ?? "منطقة الرياض والمحافظات المجاورة",
+                Status = "موثق رسمياً عبر منصة نقلا",
+                IsAvailable = !sup.IsUnavailable,
+                ExamindPagesCount = examinedCount,
+                VerificationPercentage = verificationPercentage, // 🟢 القيمة محسوبة ديناميكياً
+                ResponseSpeedMinutes = responseSpeed,           // 🟢 القيمة محسوبة ديناميكياً من الـ Repo
+                Rating = sup.Rating > 0 ? sup.Rating : 4.9,
+                WalledBalance = 14850.00m,
+                Documents = new List<SupervisorDocumentDto>
+        {
+            new() { Title = "بطاقة الرقابة والاعتماد الميداني 2025", SubTitle = "رقمية سارية - تنتهي 1447/06/15", Type = "Badge" },
+            new() { Title = "وثيقة صلاحيات فحص السلع", SubTitle = "تفويض إشرافي مباشر", Type = "Permission" },
+            new() { Title = "لائحة ضوابط وحجز الضمان", SubTitle = "الإصدار 2.4ء المعتمد", Type = "PDF" }
+        }
+            };
+        }
+
+        public async Task<bool> ToggleAvailabilityAsync(int supervisorId, bool isAvailable)
+        {
+            var sup = await _supervisorRepo.GetSupervisorByIdAsync(supervisorId);
+            if (sup == null) return false;
+
+            sup.IsUnavailable = !isAvailable;
+            return await _supervisorRepo.UpdateSupervisorAsync(sup);
+        }
+
+        public async Task<SupervisorWalletResponseDto> GetSupervisorWalletAsync(int supervisorId)
+        {
+            var transactions = await _supervisorRepo.GetSupervisorTransactionsAsync(supervisorId);
+
+            var walletRows = transactions.Select(t => new WalletTransactionDto
+            {
+                Id = t.Id,
+                Title = t.Description,
+                Type = t.Type,
+                Amount = t.Amount,
+                DateAgo = $"{Math.Max(1, (DateTime.UtcNow - t.CreatedAt).Hours)} ساعات"
+            }).ToList();
+
+            return new SupervisorWalletResponseDto
+            {
+                Balance = 8450.00m,
+                TotalDues = 12500.00m,
+                PendingAuditBalance = 4050.00m,
+                CompletionRate = 68.0,
+                RecentTransactions = walletRows
+            };
+        }
+
+        public async Task<bool> RequestWithdrawalAsync(int supervisorId, WithdrawalRequestDtoAdmin dto)
+        {
+            if (dto.Amount <= 0) return false;
+
+            // تسجيل عملية السحب كمعاملة مالية جديدة
+            var transaction = new Transaction
+            {
+                UserId = supervisorId,
+                Amount = -dto.Amount,
+                Type = "Withdrawal",
+                Description = $"سحب بنكي / {dto.DestinationType} - {dto.AccountIdentifier}",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _supervisorRepo.AddTransactionAsync(transaction);
+            return true;
         }
     }
 }

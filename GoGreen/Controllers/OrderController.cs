@@ -1,9 +1,10 @@
-﻿using Berwah.BL.Service;
+using Berwah.BL.Service;
 using Berwah.BL.Service.IService;
 using Berwah.DAL.App;
 using Berwah.Models.DTO;
 using Berwah.Models.Enum;
 using Berwah.Models.Models;
+using Berwah.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -20,13 +21,47 @@ namespace Berwah.Controllers
         private readonly ApplicationDbContext _context;
         private readonly UserManager<User> _userManager;
         private readonly INotificationService _notificationService;
+        private readonly GeoZoneService _geo;
 
-        public OrderController(ApplicationDbContext context, UserManager<User> userManager, INotificationService notificationService)
+        public OrderController(ApplicationDbContext context, UserManager<User> userManager, INotificationService notificationService, GeoZoneService geo)
         {
+            _geo = geo;
             _context = context;
             _userManager = userManager;
             _notificationService = notificationService;
         }
+
+        /// <summary>
+        /// Where the delivery spot is against every store of the order: the same city, another
+        /// city (allowed, costs more), another governorate or another country (not allowed).
+        /// Stores whose place or the spot itself is unknown never block.
+        /// </summary>
+        private async Task<(DeliveryZone Zone, double Km)> EvaluateZoneAsync(IEnumerable<CartItemDto>? items, double lat, double lon)
+        {
+            if (items == null || (lat == 0 && lon == 0)) return (DeliveryZone.Unknown, 0);
+            var ids = items.Select(i => i.ProductId).Distinct().ToList();
+            var stores = await _context.Products
+                .Where(p => ids.Contains(p.Id) && p.User != null && p.User.Latitude != 0 && p.User.Longitude != 0)
+                .Select(p => new { p.UserId, p.User!.Latitude, p.User.Longitude })
+                .Distinct()
+                .ToListAsync();
+            if (stores.Count == 0) return (DeliveryZone.Unknown, 0);
+
+            // The farthest store sets the distance (the courier visits them all).
+            var km = stores.Max(s => GeoZoneService.DistanceKm(s.Latitude, s.Longitude, lat, lon));
+
+            var dropoff = await _geo.ResolveAsync(lat, lon);
+            if (dropoff == null) return (DeliveryZone.Unknown, km);
+
+            var zones = new List<DeliveryZone>();
+            foreach (var s in stores)
+                zones.Add(GeoZoneService.Compare(await _geo.ResolveAsync(s.Latitude, s.Longitude), dropoff));
+            return (GeoZoneService.Worst(zones), km);
+        }
+
+        private static string BlockedMessage(DeliveryZone zone) => zone == DeliveryZone.BlockedCountry
+            ? "لا يمكن إتمام الطلب لاختلاف بلد الإقامة، يمكنك الطلب فقط إذا كان التوصيل داخل نفس بلد المتجر"
+            : "لا يمكن إتمام الطلب لأن المتجر في محافظة مختلفة عن عنوان التوصيل";
 
         [HttpPost("Summary")]
         public async Task<IActionResult> GetOrderSummary([FromBody] CheckoutDto model)
@@ -43,7 +78,9 @@ namespace Berwah.Controllers
                     }
                 }
 
-                decimal deliveryFee = 30;
+                var (zone, km) = await EvaluateZoneAsync(model.Items, model.UserLatitude, model.UserLongitude);
+                var extraFee = GeoZoneService.ExtraFeeFor(km);
+                decimal deliveryFee = 30 + extraFee;
                 decimal discount = 0;
 
                 var summary = new OrderSummeryDto
@@ -51,7 +88,12 @@ namespace Berwah.Controllers
                     SubTotal = subTotal,
                     DeliveryFee = deliveryFee,
                     Discount = discount,
-                    Total = subTotal + deliveryFee - discount
+                    Total = subTotal + deliveryFee - discount,
+                    DeliveryZone = GeoZoneService.Code(zone),
+                    DistanceKm = Math.Round(km, 1),
+                    ExtraDeliveryFee = extraFee,
+                    FreeDistanceKm = GeoZoneService.FreeDistanceKm,
+                    PricePerExtraKm = GeoZoneService.PricePerExtraKm
                 };
 
                 return Ok(new { status = "success", data = summary });
@@ -75,6 +117,12 @@ namespace Berwah.Controllers
 
                 if (model.Items == null || !model.Items.Any())
                     return BadRequest(new { status = "error", message = "السلة فارغة" });
+
+                // An order only goes to the store's own governorate (another city of it costs
+                // more), and never to another country.
+                var (zone, km) = await EvaluateZoneAsync(model.Items, model.UserLatitude, model.UserLongitude);
+                if (zone == DeliveryZone.BlockedCountry || zone == DeliveryZone.BlockedGovernorate)
+                    return BadRequest(new { status = "error", code = "delivery_blocked", zone = GeoZoneService.Code(zone), message = BlockedMessage(zone) });
 
                 decimal subTotal = 0;
                 var orderItems = new List<OrderItem>();
@@ -130,7 +178,7 @@ namespace Berwah.Controllers
                     product.Stock -= cartItem.Quantity;
                 }
 
-                decimal deliveryFee = 30;
+                decimal deliveryFee = 30 + GeoZoneService.ExtraFeeFor(km);
                 decimal finalTotal = subTotal + deliveryFee;
 
                 // What was bought leaves the server cart in the same save as the order.
@@ -456,7 +504,7 @@ namespace Berwah.Controllers
                     title = r.SubCategory?.Name ?? "طلب خدمة",
                     status = r.Status switch
                     {
-                        ServiceRequestStatus.Accepted or ServiceRequestStatus.InProgress => "InProgress",
+                        ServiceRequestStatus.Approved or ServiceRequestStatus.InProgress => "InProgress",
                         ServiceRequestStatus.Completed => "Completed",
                         ServiceRequestStatus.Cancelled => "Cancelled",
                         _ => "Pending"

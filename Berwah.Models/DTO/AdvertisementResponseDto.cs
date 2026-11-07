@@ -18,7 +18,10 @@ namespace Berwah.Models.DTO
         public int CategoryId { get; set; }
         public int SubCategoryId { get; set; }
         public string Description { get; set; } = string.Empty;
+        /// <summary>The plan the ad is running on now (Free / Featured / VIP) — a paid one only while it is active.</summary>
         public string PromotionPlan { get; set; } = string.Empty;
+        public DateTime? PromotionEndsAt { get; set; }
+        public DateTime? ExpiresAt { get; set; }
         public List<string> ImageUrls { get; set; } = new();
         public DateTime CreatedAt { get; set; }
         public int SellerId { get; set; }

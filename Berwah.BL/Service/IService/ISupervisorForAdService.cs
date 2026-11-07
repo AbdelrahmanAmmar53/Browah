@@ -20,9 +20,9 @@ namespace Berwah.BL.Service.IService
         Task<bool> HideAdAsync(int id, HideAdDto dto);
         Task<AdReportResponse> GetReportsAsync(string period);
         Task<bool> ExecuteRegulatoryActionAsync(int adId, RegulatoryActionDto dto);
-
-
-
-
+        Task<SupervisorProfileResponseDto?> GetSupervisorProfileAsync(int supervisorId);
+        Task<bool> ToggleAvailabilityAsync(int supervisorId, bool isAvailable);
+        Task<SupervisorWalletResponseDto> GetSupervisorWalletAsync(int supervisorId);
+        Task<bool> RequestWithdrawalAsync(int supervisorId, WithdrawalRequestDtoAdmin dto);
     }
 }

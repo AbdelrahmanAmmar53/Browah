@@ -41,7 +41,7 @@ namespace Berwah.BL.Service
                 CreatedAt = ad.CreatedAt,
                 Governorate = ad.Governorate,
                 City = ad.City,
-                PromotionPlan = ad.PromotionPlan.ToString(),
+                PromotionPlan = ad.EffectivePlan.ToString(),
                 ImageUrl = ad.AdvertismentImages.Select(ai => ai.Image?.Url ?? "").FirstOrDefault() ?? "",
                 CategoryId = ad.CategoryId,
                 CategoryName = ad.Category?.Name ?? "",

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Berwah.Models.Enum;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,6 +17,7 @@ namespace Berwah.Models.DTO.Service
         public string ServiceOptionName { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public decimal Price { get; set; }
+        public ServiceRequestStatus Status { get; set; }
         public string? PickupAddress { get; set; }
         public string? DeliveryAddress { get; set; }
         public double? PickupLatitude { get; set; }

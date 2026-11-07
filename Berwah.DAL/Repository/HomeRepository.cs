@@ -29,10 +29,11 @@ namespace Berwah.DAL.Repository
                 .Include(a => a.User)
                 .Include(a => a.Category)
                 .AsNoTracking()
-                .Where(a => a.Status == AdStatus.Approved)
+                .Where(a => a.Status == AdStatus.Approved && (a.ExpiresAt == null || a.ExpiresAt > DateTime.UtcNow))
 
-                .OrderBy(a => a.PromotionPlan == PromotionPlanType.VIP ? 1 :
-                              (a.PromotionPlan.ToString().ToLower() == "feature" || a.PromotionPlan.ToString().ToLower() == "featured") ? 2 : 3)
+                // Active VIP first, then active Featured, then the rest.
+                .OrderBy(a => (a.PromotionPlan == PromotionPlanType.VIP && a.PromotionEndsAt > DateTime.UtcNow) ? 1 :
+                              (a.PromotionPlan == PromotionPlanType.Featured && a.PromotionEndsAt > DateTime.UtcNow) ? 2 : 3)
 
                 .ThenByDescending(a => a.CreatedAt)
                 .Take(count)
@@ -45,8 +46,13 @@ namespace Berwah.DAL.Repository
                 .Include(a => a.AdvertismentImages)
                     .ThenInclude(ai => ai.Image)
                 .AsNoTracking()
-                .Where(a => a.PromotionPlan.ToString() == "VIP")
-                .OrderByDescending(a => a.CreatedAt)
+                // Only a VIP plan that is still running, approved and not expired; at most 5 on the home screen.
+                .Where(a => a.Status == AdStatus.Approved
+                         && a.PromotionPlan == PromotionPlanType.VIP
+                         && a.PromotionEndsAt > DateTime.UtcNow
+                         && (a.ExpiresAt == null || a.ExpiresAt > DateTime.UtcNow))
+                .OrderByDescending(a => a.PromotionEndsAt)
+                .Take(AdPromotionRules.MaxVipOnHome)
                 .ToListAsync();
         }
 
@@ -59,8 +65,12 @@ namespace Berwah.DAL.Repository
                 .Include(a => a.User)
                 .AsNoTracking()
         
-                .Where(a => a.PromotionPlan == PromotionPlanType.Featured || a.PromotionPlan == PromotionPlanType.Free)
-                .OrderByDescending(a => a.CreatedAt)
+                // Everything but a running VIP (that one is in the banners), the running Featured ones first.
+                .Where(a => a.Status == AdStatus.Approved
+                         && (a.ExpiresAt == null || a.ExpiresAt > DateTime.UtcNow)
+                         && !(a.PromotionPlan == PromotionPlanType.VIP && a.PromotionEndsAt > DateTime.UtcNow))
+                .OrderBy(a => (a.PromotionPlan == PromotionPlanType.Featured && a.PromotionEndsAt > DateTime.UtcNow) ? 0 : 1)
+                .ThenByDescending(a => a.CreatedAt)
                 .ToListAsync();
         }
 
@@ -106,16 +116,16 @@ namespace Berwah.DAL.Repository
         {
             var query = _context.ServiceRequests
                 .AsNoTracking()
-                .Where(r => r.Status == ServiceRequestStatus.Pending);
+                .Where(r => r.Status == ServiceRequestStatus.Approved); 
 
             if (subCategoryId.HasValue)
             {
-                query = query.Where(r => r.SubCategoryId == subCategoryId.Value); 
+                query = query.Where(r => r.SubCategoryId == subCategoryId.Value);
             }
 
             return await query
                 .Include(r => r.User).ThenInclude(u => u.Images)
-                .Include(r => r.SubCategory) 
+                .Include(r => r.SubCategory)
                 .OrderByDescending(r => r.CreatedAt)
                 .ToListAsync();
         }
@@ -123,7 +133,7 @@ namespace Berwah.DAL.Repository
         {
             return await _context.ServiceRequests
                 .AsNoTracking()
-                .Where(r => r.Status == ServiceRequestStatus.Pending)
+                .Where(r => r.Status == ServiceRequestStatus.Approved) 
                 .Include(r => r.User).ThenInclude(u => u.Images)
                 .Include(r => r.SubCategory)
                 .OrderByDescending(r => r.CreatedAt)
@@ -133,7 +143,7 @@ namespace Berwah.DAL.Repository
         public async Task<int> GetServiceRequestsCountBySubCategoryIdAsync(int subCategoryId)
         {
             return await _context.ServiceRequests
-                .CountAsync(sr => sr.SubCategoryId == subCategoryId);
+                .CountAsync(sr => sr.SubCategoryId == subCategoryId && sr.Status == ServiceRequestStatus.Approved); 
         }
 
         public async Task<int> GetMerchantsCountByBusinessTypeAsync(string businessTypeName)

@@ -1,4 +1,4 @@
-﻿using Berwah.DAL.App;
+using Berwah.DAL.App;
 using FirebaseAdmin;
 using FirebaseAdmin.Messaging;
 using Google.Apis.Auth.OAuth2;
@@ -81,7 +81,7 @@ namespace Berwah.Services
                         Android = new AndroidConfig
                         {
                             Priority = Priority.High,
-                            Notification = new AndroidNotification { Sound = "default" }
+                            Notification = new AndroidNotification { Sound = "default", ChannelId = "berwah_notifications" }
                         },
                         Data = new Dictionary<string, string>
                         {

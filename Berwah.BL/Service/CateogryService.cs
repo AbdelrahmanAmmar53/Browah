@@ -162,7 +162,7 @@ namespace Berwah.BL.Service
                 City = ad.City,
                 CategoryId = ad.CategoryId,
                 SubCategoryId = ad.SubCategoryId, 
-                PromotionPlan = ad.PromotionPlan.ToString(),
+                PromotionPlan = ad.EffectivePlan.ToString(),
                 ImageUrls = ad.AdvertismentImages?.Select(ai => ai.Image!.Url).ToList() ?? new(),
                 Specifications = ad.Specifications?.Select(s => new SpecificationItemDto
                 {

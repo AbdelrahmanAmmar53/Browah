@@ -29,6 +29,7 @@ namespace Berwah.DAL.App
         public DbSet<OrderItem> OrderItems { get; set; }
         public DbSet<PlatFormSetting> PlatFormSettings { get; set; }
         public DbSet<Advertisment> Advertisements { get; set; }
+        public DbSet<AdPromotionPurchase> AdPromotionPurchases { get; set; }
         public DbSet<AdvertisementSpecification> AdvertisementSpecifications { get; set; }
         public DbSet<AdvertisementReview> AdvertisementReviews { get; set; }
         public DbSet<AdvertismentImage> AdvertismentImages { get; set; }
@@ -182,15 +183,24 @@ namespace Berwah.DAL.App
                .Property(t => t.Amount)
                .HasColumnType("decimal(18,2)");
 
+            builder.Entity<AdPromotionPurchase>(entity =>
+            {
+                entity.Property(p => p.Amount).HasColumnType("decimal(18,2)");
+                entity.HasOne(p => p.Advertisment).WithMany().HasForeignKey(p => p.AdvertismentId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(p => p.User).WithMany().HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasIndex(p => new { p.Status, p.CreatedAt });
+            });
+
             builder.Entity<User>()
                 .Property(u => u.MinimumOrder)
                 .HasColumnType("decimal(18,2)");
+            
             builder.Entity<ServiceRequest>()
                 .HasOne(sr => sr.User)
                 .WithMany() 
                 .HasForeignKey(sr => sr.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
-
+            
             builder.Entity<Advertisment>()
                .HasOne(a => a.SubCategory) 
                .WithMany(sc => sc.Advertisements) 
@@ -202,6 +212,7 @@ namespace Berwah.DAL.App
                .WithMany(u => u.MenuSections) 
                .HasForeignKey(m => m.MerchantId)
                .OnDelete(DeleteBehavior.Cascade);
+          
             builder.Entity<Product>()
         .HasOne(p => p.MenuSection)
         .WithMany(s => s.Products)

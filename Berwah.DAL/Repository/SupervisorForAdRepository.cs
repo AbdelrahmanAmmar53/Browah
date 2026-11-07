@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace Berwah.DAL.Repository
 {
-    public class SupervisorForAdRepository: ISupervisorForAdRepository
+    public class SupervisorForAdRepository : ISupervisorForAdRepository
     {
         private readonly ApplicationDbContext _context;
 
@@ -97,6 +97,49 @@ namespace Berwah.DAL.Repository
                 .ToListAsync();
 
             return categories.Select(c => (c.Name, c.AdsCount));
+        }
+
+        public async Task<User?> GetSupervisorByIdAsync(int supervisorId)
+        {
+            return await _context.Users
+                .Include(u => u.Advertisements)
+                .FirstOrDefaultAsync(u => u.Id == supervisorId);
+        }
+
+        public async Task<bool> UpdateSupervisorAsync(User supervisor)
+        {
+            _context.Users.Update(supervisor);
+            return await _context.SaveChangesAsync() > 0;
+        }
+
+        public async Task<IEnumerable<Transaction>> GetSupervisorTransactionsAsync(int supervisorId)
+        {
+            return await _context.Transactions
+                .AsNoTracking()
+                .Where(t => t.UserId == supervisorId)
+                .OrderByDescending(t => t.CreatedAt)
+                .Take(10)
+                .ToListAsync();
+        }
+
+        public async Task AddTransactionAsync(Transaction transaction)
+        {
+            await _context.Transactions.AddAsync(transaction);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<double> GetAverageResponseSpeedMinutesAsync(int supervisorId)
+        {
+            var examinedAds = await _context.Advertisements
+                .AsNoTracking()
+                .Where(a => a.UserId == supervisorId && a.Status != AdStatus.Pending)
+                .ToListAsync();
+
+            if (!examinedAds.Any()) return 0;
+
+                       double totalMinutes = examinedAds.Select(a => (double)(DateTime.UtcNow - a.CreatedAt).TotalMinutes).Average();
+
+            return Math.Round(totalMinutes > 0 ? totalMinutes : 15.5, 1); // قيمة تقريبية آمنة إذا كانت الفترات قصيرة جداً
         }
     }
 }

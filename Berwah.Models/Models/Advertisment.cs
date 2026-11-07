@@ -26,6 +26,19 @@ namespace Berwah.Models.Models
         public string City { get; set; } = string.Empty;
         public PromotionPlanType PromotionPlan { get; set; }
 
+        /// <summary>When the paid plan (Featured / VIP) stops. Null until an admin approves the purchase; after this the ad is a normal one.</summary>
+        public DateTime? PromotionEndsAt { get; set; }
+
+        /// <summary>When the ad stops being shown (15 days after its approval). Null for ads approved before this existed: they don't expire.</summary>
+        public DateTime? ExpiresAt { get; set; }
+
+        /// <summary>The plan the ad is really running on right now: a paid plan only while it is active, otherwise Free.</summary>
+        [NotMapped]
+        public PromotionPlanType EffectivePlan =>
+            PromotionPlan != PromotionPlanType.Free && PromotionEndsAt.HasValue && PromotionEndsAt.Value > DateTime.UtcNow
+                ? PromotionPlan
+                : PromotionPlanType.Free;
+
         public int UserId { get; set; }
         public User? User { get; set; }
 

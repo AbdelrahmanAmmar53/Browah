@@ -1,4 +1,4 @@
-﻿using Berwah.Models.Models;
+using Berwah.Models.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -9,6 +9,9 @@ namespace ThanyaProject.Services
 {
     public class JwtService
     {
+        /// A sign-in lasts this long from the moment it is made. The app counts the same time down.
+        public const int SessionMinutes = 30;
+
         private readonly IConfiguration _configuration;
 
         public JwtService(IConfiguration configuration)
@@ -44,9 +47,7 @@ namespace ThanyaProject.Services
                 issuer: jwtSettings["Issuer"],
                 audience: jwtSettings["Audience"],
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(
-                    Convert.ToDouble(jwtSettings["DurationInMinutes"])
-                ),
+                expires: DateTime.UtcNow.AddMinutes(SessionMinutes),
                 signingCredentials: creds
             );
 

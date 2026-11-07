@@ -6,6 +6,7 @@ using Berwah.Models.DTO;
 using Berwah.Models.Enum;
 using Berwah.Models.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -30,9 +31,11 @@ namespace Berwah.Controllers
         private readonly ApplicationDbContext _db;
         private readonly IHubContext<NotificationHub> _hub;
         private readonly INotificationService _notifications;
+        private readonly IImageService _imageService;
 
-        public ChatController(ApplicationDbContext db, IHubContext<NotificationHub> hub, INotificationService notifications)
+        public ChatController(ApplicationDbContext db, IHubContext<NotificationHub> hub, INotificationService notifications, IImageService imageService)
         {
+            _imageService = imageService;
             _db = db;
             _hub = hub;
             _notifications = notifications;
@@ -185,7 +188,7 @@ namespace Berwah.Controllers
                         otherUserId = otherId,
                         otherName = other == null ? string.Empty : NameOf(other),
                         otherImage = other?.ProfileImageUrl,
-                        lastMessage = last?.Text ?? string.Empty,
+                        lastMessage = last == null ? string.Empty : (string.IsNullOrEmpty(last.Text) && last.ImageUrl != null ? "📷 صورة" : last.Text),
                         lastMessageAt = last?.CreatedAt ?? c.CreatedAt,
                         unread = unread.TryGetValue(c.Id, out var n) ? n : 0
                     };
@@ -352,7 +355,7 @@ namespace Berwah.Controllers
             var list = await _db.ChatMessages.AsNoTracking()
                 .Where(m => m.ConversationId == id && m.Id > afterId)
                 .OrderByDescending(m => m.Id).Take(200).OrderBy(m => m.Id)
-                .Select(m => new { id = m.Id, senderId = m.SenderId, text = m.Text, createdAt = m.CreatedAt, mine = m.SenderId == me })
+                .Select(m => new { id = m.Id, senderId = m.SenderId, text = m.Text, imageUrl = m.ImageUrl, createdAt = m.CreatedAt, mine = m.SenderId == me })
                 .ToListAsync();
 
             // What the other side sent is read now.
@@ -407,6 +410,64 @@ namespace Berwah.Controllers
                 return Ok(new { status = "success", data = new { id = msg.Id, createdAt = msg.CreatedAt } });
             }
             catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ غير متوقع، حاول مرة أخرى" });
+            }
+        }
+
+        public class SendChatImageDto
+        {
+            public IFormFile? Image { get; set; }
+            public string? Text { get; set; }
+        }
+
+        /// <summary>Sends a photo (with an optional caption) into the chat.</summary>
+        [HttpPost("{id}/image")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> SendImage(int id, [FromForm] SendChatImageDto dto)
+        {
+            try
+            {
+                var c = await MineAsync(id);
+                if (c == null) return NotFound(new { status = "error", message = "المحادثة غير موجودة" });
+
+                var file = dto.Image;
+                if (file == null || file.Length == 0) return BadRequest(new { status = "error", message = "الصورة مطلوبة" });
+                if (file.Length > 8 * 1024 * 1024) return BadRequest(new { status = "error", message = "الصورة كبيرة جداً (الحد 8 ميجا)" });
+                if (file.ContentType == null || !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                    return BadRequest(new { status = "error", message = "الملف لازم يكون صورة" });
+
+                var up = await _imageService.UploadImageAsync(file);
+                var url = up?.SecureUrl?.ToString();
+                if (string.IsNullOrEmpty(url)) return StatusCode(500, new { status = "error", message = "تعذر رفع الصورة، حاول مرة أخرى" });
+
+                var caption = dto.Text?.Trim() ?? string.Empty;
+                if (caption.Length > 1000) caption = caption[..1000];
+
+                var me = Me;
+                var msg = new ChatMessage { ConversationId = c.Id, SenderId = me, Text = caption, ImageUrl = url, CreatedAt = DateTime.UtcNow };
+                _db.ChatMessages.Add(msg);
+                c.LastMessageAt = msg.CreatedAt;
+                await _db.SaveChangesAsync();
+
+                var otherId = c.UserAId == me ? c.UserBId : c.UserAId;
+                var sender = await _db.Users.AsNoTracking().FirstAsync(u => u.Id == me);
+                var payload = new { id = msg.Id, conversationId = c.Id, senderId = me, senderName = NameOf(sender), text = msg.Text, imageUrl = url, createdAt = msg.CreatedAt };
+                try { await _hub.Clients.User(otherId.ToString()).SendAsync("ReceiveChatMessage", payload); } catch { }
+                try
+                {
+                    await _notifications.SendNotificationAsync(new SendNotification
+                    {
+                        UserId = otherId,
+                        Title = NameOf(sender),
+                        Message = caption.Length == 0 ? "📷 صورة" : "📷 " + (caption.Length > 110 ? caption[..110] + "…" : caption)
+                    });
+                }
+                catch { /* best effort */ }
+
+                return Ok(new { status = "success", data = new { id = msg.Id, createdAt = msg.CreatedAt, imageUrl = url } });
+            }
+            catch (Exception)
             {
                 return StatusCode(500, new { status = "error", message = "حدث خطأ غير متوقع، حاول مرة أخرى" });
             }

@@ -18,5 +18,10 @@ namespace Berwah.DAL.Repository.IRepository
         Task<int> GetCountByStatusInRangeAsync(AdStatus status, DateTime? startDate, DateTime? endDate);
         Task<IEnumerable<Advertisment>> GetRecentLogsAsync(int count);
         Task<IEnumerable<(string CategoryName, int AdsCount)>> GetCategoryDistributionsAsync(DateTime? startDate);
+        Task<User?> GetSupervisorByIdAsync(int supervisorId);
+        Task<bool> UpdateSupervisorAsync(User supervisor);
+        Task<IEnumerable<Transaction>> GetSupervisorTransactionsAsync(int supervisorId);
+        Task AddTransactionAsync(Transaction transaction);
+        Task<double> GetAverageResponseSpeedMinutesAsync(int supervisorId);
     }
 }

@@ -64,7 +64,7 @@ using System.Threading.Tasks;
                     Governorate = a.Governorate,
                     City = a.City,
                     ProductType = a.Condition.ToString(),
-                    PromotionPlan = a.PromotionPlan.ToString(),
+                    PromotionPlan = a.EffectivePlan.ToString(),
                     ImageUrl = a.AdvertismentImages?.FirstOrDefault()?.Image?.Url
                 }).ToList(),
 
@@ -77,7 +77,7 @@ using System.Threading.Tasks;
                     Governorate = a.Governorate,
                     City = a.City,
                     ProductType = a.Condition.ToString(),
-                    PromotionPlan = a.PromotionPlan.ToString(),
+                    PromotionPlan = a.EffectivePlan.ToString(),
                     ImageUrl = a.AdvertismentImages?.FirstOrDefault()?.Image?.Url
                 }).ToList(),
 
@@ -90,7 +90,7 @@ using System.Threading.Tasks;
                     Governorate = a.Governorate,
                     City = a.City,
                     ProductType = a.Condition.ToString(),
-                    PromotionPlan = a.PromotionPlan.ToString(),
+                    PromotionPlan = a.EffectivePlan.ToString(),
                     ImageUrl = a.AdvertismentImages?.FirstOrDefault()?.Image?.Url,
                     SellerName = a.User?.FirstName
                 }).ToList(),
@@ -104,7 +104,7 @@ using System.Threading.Tasks;
                     Governorate = p.Governorate,
                     City = p.City,
                     ProductType = p.Condition.ToString(),
-                    PromotionPlan = p.PromotionPlan.ToString(),
+                    PromotionPlan = p.EffectivePlan.ToString(),
                     ImageUrl = p.AdvertismentImages?.FirstOrDefault()?.Image?.Url,
                     SellerName = p.User?.FirstName
                 }).ToList()

@@ -1,4 +1,4 @@
-﻿using Berwah.BL.Service;
+using Berwah.BL.Service;
 using Berwah.BL.Service.IService;
 using Berwah.DAL.App;
 using Berwah.DAL.Repository.IRepository;
@@ -260,6 +260,13 @@ namespace Berwah.Controllers
                         model.NationalIdImageUrl = res.SecureUrl.ToString();
                 }
 
+                if (model.NationalIdBackImage != null && model.NationalIdBackImage.Length > 0)
+                {
+                    var res = await _imageService.UploadImageAsync(model.NationalIdBackImage);
+                    if (res != null && !string.IsNullOrEmpty(res.SecureUrl?.ToString()))
+                        model.NationalIdBackImageUrl = res.SecureUrl.ToString();
+                }
+
                 if (model.DrivingLicenseImage != null && model.DrivingLicenseImage.Length > 0)
                 {
                     var res = await _imageService.UploadImageAsync(model.DrivingLicenseImage);
@@ -283,6 +290,7 @@ namespace Berwah.Controllers
 
                 model.PersonalImage = null;
                 model.NationalIdImage = null;
+                model.NationalIdBackImage = null;
                 model.DrivingLicenseImage = null;
                 model.CriminalRecordImage = null;
                 model.VeicleImage = null;
@@ -320,6 +328,41 @@ namespace Berwah.Controllers
         #endregion
 
         #region Registration Step 2 - Verify OTP & Create Account
+
+        public class ResendOtpRequest { public string TargetEmail { get; set; } = string.Empty; }
+
+        [HttpPost("ResendRegisterOtp")]
+        public async Task<IActionResult> ResendRegisterOtp([FromBody] ResendOtpRequest model)
+        {
+            try
+            {
+                if (model == null || string.IsNullOrWhiteSpace(model.TargetEmail))
+                    return BadRequest(new { status = "error", message = "البيانات المدخلة غير صحيحة" });
+
+                var normalizedEmail = model.TargetEmail.Trim().ToLower();
+                var otpCode = ((Berwah.BL.Service.UserService)_userService).RegenerateOtp($"Register:{normalizedEmail}");
+
+                if (otpCode == null)
+                    return BadRequest(new { status = "error", message = "انتهت صلاحية طلب التسجيل، برجاء إعادة التسجيل" });
+
+                string htmlMessage = $@"
+            <div style='direction: rtl; font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; border-radius: 10px;'>
+                <h2 style='color: #333;'>رمز تأكيد الحساب</h2>
+                <p>رمز التحقق الخاص بك هو:</p>
+                <div style='background: white; padding: 15px; border-radius: 5px; text-align: center;'>
+                    <b style='font-size: 24px; color: #6c5ce7; letter-spacing: 5px;'>{otpCode}</b>
+                </div>
+                <p style='color: #666;'>هذا الرمز صالح لمدة <b>5 دقائق</b> فقط.</p>
+            </div>";
+
+                await _emailService.SendEmailAsync(normalizedEmail, "رمز تأكيد الحساب - برواح", htmlMessage);
+                return Ok(new { status = "success", message = "تم إرسال رمز جديد إلى بريدك الإلكتروني", expiresIn = 300 });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء إعادة إرسال الرمز" });
+            }
+        }
 
         [HttpPost("VerifyRegisterOtp")]
         public async Task<IActionResult> VerifyRegisterOtp([FromBody] VerifyOTP model)
@@ -409,6 +452,7 @@ namespace Berwah.Controllers
 
                     user.ProfileImageUrl = deliveryDto.PersonalImageUrl;
                     user.NationalIdImageUrl = deliveryDto.NationalIdImageUrl;
+                    user.NationalIdBackImageUrl = deliveryDto.NationalIdBackImageUrl;
                     user.DrivingLicenseImageUrl = deliveryDto.DrivingLicenseImageUrl;
                     user.CriminalRecordImageUrl = deliveryDto.CriminalRecordImageUrl;
                     user.VehicleImageUrl = deliveryDto.VehicleImageUrl;
@@ -494,7 +538,7 @@ namespace Berwah.Controllers
                 var refreshToken = new RefreshToken
                 {
                     Token = GenerateRefreshToken(),
-                    Expires = DateTime.UtcNow.AddDays(7), 
+                    Expires = DateTime.UtcNow.AddDays(7), DeviceId = CurrentDeviceId(), 
                     UserId = user.Id
                 };
 
@@ -524,6 +568,14 @@ namespace Berwah.Controllers
         
         #endregion
 
+        /// <summary>The phone's own id, sent by the app with every request.</summary>
+        private string? CurrentDeviceId()
+        {
+            var value = Request.Headers["X-Device-Id"].ToString().Trim();
+            if (value.Length == 0) return null;
+            return value.Length > 100 ? value[..100] : value;
+        }
+
         [HttpPost("RefreshToken")]
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequestDto model)
         {
@@ -541,6 +593,16 @@ namespace Berwah.Controllers
                 if (storedRefreshToken == null || !storedRefreshToken.IsActive)
                     return Unauthorized(new { status = "error", message = "جلسة العمل منتهية، يرجى تسجيل الدخول من جديد" });
 
+                // A remembered account opens only on the phone it was signed in on: any
+                // other device must use the password or a code sent to the email.
+                var deviceId = CurrentDeviceId();
+                if (!string.IsNullOrEmpty(storedRefreshToken.DeviceId) && storedRefreshToken.DeviceId != deviceId)
+                {
+                    storedRefreshToken.Revoked = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                    return Unauthorized(new { status = "error", code = "device_mismatch", message = "هذا الجهاز غير مطابق للجهاز المسجل، سجّل الدخول بكلمة المرور أو برمز التحقق" });
+                }
+
                 var user = storedRefreshToken.User;
 
                 var roles = await _userManager.GetRolesAsync(user);
@@ -552,7 +614,7 @@ namespace Berwah.Controllers
                 var newRefreshToken = new RefreshToken
                 {
                     Token = GenerateRefreshToken(),
-                    Expires = DateTime.UtcNow.AddDays(7),
+                    Expires = DateTime.UtcNow.AddDays(7), DeviceId = CurrentDeviceId(),
                     UserId = user.Id
                 };
 
@@ -603,7 +665,7 @@ namespace Berwah.Controllers
                 var refreshToken = new RefreshToken
                 {
                     Token = GenerateRefreshToken(),
-                    Expires = DateTime.UtcNow.AddDays(7), 
+                    Expires = DateTime.UtcNow.AddDays(7), DeviceId = CurrentDeviceId(), 
                     UserId = user.Id
                 };
 
@@ -629,6 +691,95 @@ namespace Berwah.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء تسجيل الدخول", details = ex.Message });
+            }
+        }
+
+        // ---- Sign in with an emailed code (the "remember me" unlock) ----
+
+        public class LoginOtpRequest { public string TargetEmail { get; set; } = string.Empty; }
+        public class VerifyLoginOtpRequest { public string TargetEmail { get; set; } = string.Empty; public string Otp { get; set; } = string.Empty; }
+
+        [HttpPost("SendLoginOtp")]
+        public async Task<IActionResult> SendLoginOtp([FromBody] LoginOtpRequest model)
+        {
+            try
+            {
+                if (model == null || string.IsNullOrWhiteSpace(model.TargetEmail))
+                    return BadRequest(new { status = "error", message = "البيانات المدخلة غير صحيحة" });
+
+                var email = model.TargetEmail.Trim().ToLower();
+                var user = await _userManager.FindByNameAsync(email);
+                if (user == null)
+                    return BadRequest(new { status = "error", message = "المستخدم غير موجود" });
+
+                var otp = _userService.GenerateAndSaveOtp($"Login:{email}", null, null);
+
+                string htmlMessage = $@"
+            <div style='direction: rtl; font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; border-radius: 10px;'>
+                <h2 style='color: #333;'>رمز الدخول إلى حسابك</h2>
+                <p>رمز التحقق الخاص بك هو:</p>
+                <div style='background: white; padding: 15px; border-radius: 5px; text-align: center;'>
+                    <b style='font-size: 24px; color: #6c5ce7; letter-spacing: 5px;'>{otp}</b>
+                </div>
+                <p style='color: #666;'>هذا الرمز صالح لمدة <b>5 دقائق</b> فقط.</p>
+                <p style='color: #999; font-size: 12px;'>إذا لم تطلب هذا الرمز، يرجى تجاهل هذه الرسالة.</p>
+            </div>";
+
+                await _emailService.SendEmailAsync(email, "رمز الدخول - برواح", htmlMessage);
+                return Ok(new { status = "success", message = "تم إرسال رمز التحقق إلى بريدك الإلكتروني", expiresIn = 300 });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء إرسال الرمز" });
+            }
+        }
+
+        [HttpPost("VerifyLoginOtp")]
+        public async Task<IActionResult> VerifyLoginOtp([FromBody] VerifyLoginOtpRequest model)
+        {
+            try
+            {
+                if (model == null || string.IsNullOrWhiteSpace(model.TargetEmail) || string.IsNullOrWhiteSpace(model.Otp))
+                    return BadRequest(new { status = "error", message = "البيانات المدخلة غير صحيحة" });
+
+                var email = model.TargetEmail.Trim().ToLower();
+                if (!_userService.VerifyOtp($"Login:{email}", model.Otp.Trim(), out _, out _))
+                    return BadRequest(new { status = "error", message = "رمز التحقق غير صحيح أو انتهت صلاحيته" });
+
+                var user = await _userManager.FindByNameAsync(email);
+                if (user == null)
+                    return BadRequest(new { status = "error", message = "المستخدم غير موجود" });
+
+                var roles = await _userManager.GetRolesAsync(user);
+                var token = _jwtService.CreateToken(user, roles);
+                var refreshToken = new RefreshToken
+                {
+                    Token = GenerateRefreshToken(),
+                    Expires = DateTime.UtcNow.AddDays(7), DeviceId = CurrentDeviceId(),
+                    UserId = user.Id
+                };
+                await _context.RefreshTokens.AddAsync(refreshToken);
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    status = "success",
+                    message = "تم تسجيل الدخول بنجاح",
+                    token = token,
+                    refreshToken = refreshToken.Token,
+                    data = new
+                    {
+                        userId = user.Id,
+                        email = user.Email,
+                        name = $"{user.FirstName} {user.LastName}".Trim(),
+                        role = roles.FirstOrDefault(),
+                        lastLogin = DateTime.UtcNow
+                    }
+                });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء تسجيل الدخول" });
             }
         }
 
@@ -855,6 +1006,144 @@ namespace Berwah.Controllers
         }
         #endregion
 
+        #region Change email / phone (confirmed with an emailed code)
+
+        public class NewEmailRequest { public string NewEmail { get; set; } = string.Empty; }
+        public class NewPhoneRequest { public string NewPhone { get; set; } = string.Empty; }
+        public class ConfirmContactRequest { public string Kind { get; set; } = string.Empty; public string Otp { get; set; } = string.Empty; }
+
+        [Authorize]
+        [HttpGet("ContactInfo")]
+        public async Task<IActionResult> GetContactInfo()
+        {
+            var user = await _userManager.FindByIdAsync(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            if (user == null) return NotFound(new { status = "error", message = "المستخدم غير موجود" });
+            return Ok(new { status = "success", data = new { email = user.Email, phone = user.PhoneNumber } });
+        }
+
+        private Task SendContactOtpAsync(string toEmail, string otp, string title) =>
+            _emailService.SendEmailAsync(toEmail, title + " - برواح", $@"
+            <div style='direction: rtl; font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; border-radius: 10px;'>
+                <h2 style='color: #333;'>{title}</h2>
+                <p>رمز التحقق الخاص بك هو:</p>
+                <div style='background: white; padding: 15px; border-radius: 5px; text-align: center;'>
+                    <b style='font-size: 24px; color: #6c5ce7; letter-spacing: 5px;'>{otp}</b>
+                </div>
+                <p style='color: #666;'>هذا الرمز صالح لمدة <b>5 دقائق</b> فقط.</p>
+                <p style='color: #999; font-size: 12px;'>إذا لم تطلب هذا التغيير، تجاهل الرسالة وغيّر كلمة المرور.</p>
+            </div>");
+
+        /// <summary>Step 1 of an email change: the code goes to the NEW address, proving it is the person's.</summary>
+        [Authorize]
+        [HttpPost("RequestEmailChange")]
+        public async Task<IActionResult> RequestEmailChange([FromBody] NewEmailRequest model)
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null) return NotFound(new { status = "error", message = "المستخدم غير موجود" });
+
+                var newEmail = (model?.NewEmail ?? string.Empty).Trim().ToLower();
+                if (!IsValidEmail(newEmail))
+                    return BadRequest(new { status = "error", message = "صيغة البريد الإلكتروني غير صحيحة" });
+                if (string.Equals(newEmail, user.Email, StringComparison.OrdinalIgnoreCase))
+                    return BadRequest(new { status = "error", message = "هذا هو بريدك الحالي بالفعل" });
+                if (await _userManager.FindByNameAsync(newEmail) != null)
+                    return BadRequest(new { status = "error", message = "البريد الإلكتروني مستخدم بالفعل" });
+
+                var otp = _userService.GenerateAndSaveOtp($"Contact:email:{userId}", newEmail, "email");
+                await SendContactOtpAsync(newEmail, otp, "تأكيد البريد الإلكتروني الجديد");
+                return Ok(new { status = "success", message = "تم إرسال رمز التحقق إلى بريدك الإلكتروني الجديد", expiresIn = 300 });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء إرسال الرمز" });
+            }
+        }
+
+        /// <summary>Step 1 of a phone change: there is no SMS service, so the code goes to the account's current email.</summary>
+        [Authorize]
+        [HttpPost("RequestPhoneChange")]
+        public async Task<IActionResult> RequestPhoneChange([FromBody] NewPhoneRequest model)
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null || string.IsNullOrEmpty(user.Email))
+                    return NotFound(new { status = "error", message = "المستخدم غير موجود" });
+
+                var newPhone = (model?.NewPhone ?? string.Empty).Trim();
+                if (!System.Text.RegularExpressions.Regex.IsMatch(newPhone, @"^01[0-9]{9}$"))
+                    return BadRequest(new { status = "error", message = "رقم الهاتف غير صحيح" });
+                if (newPhone == user.PhoneNumber)
+                    return BadRequest(new { status = "error", message = "هذا هو رقمك الحالي بالفعل" });
+                if (await _context.Users.AnyAsync(u => u.PhoneNumber == newPhone))
+                    return BadRequest(new { status = "error", message = "رقم الهاتف مستخدم بالفعل" });
+
+                var otp = _userService.GenerateAndSaveOtp($"Contact:phone:{userId}", newPhone, "phone");
+                await SendContactOtpAsync(user.Email, otp, "تأكيد تغيير رقم الهاتف");
+                return Ok(new { status = "success", message = "تم إرسال رمز التحقق إلى بريدك الإلكتروني", expiresIn = 300 });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء إرسال الرمز" });
+            }
+        }
+
+        /// <summary>Step 2: checks the code and applies the change. A new email also becomes the sign-in name, so fresh tokens are returned.</summary>
+        [Authorize]
+        [HttpPost("ConfirmContactChange")]
+        public async Task<IActionResult> ConfirmContactChange([FromBody] ConfirmContactRequest model)
+        {
+            try
+            {
+                var kind = (model?.Kind ?? string.Empty).Trim().ToLower();
+                if ((kind != "email" && kind != "phone") || string.IsNullOrWhiteSpace(model?.Otp))
+                    return BadRequest(new { status = "error", message = "البيانات المدخلة غير صحيحة" });
+
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+                if (!_userService.VerifyOtp($"Contact:{kind}:{userId}", model!.Otp.Trim(), out var pending, out _) || pending is not string newValue)
+                    return BadRequest(new { status = "error", message = "رمز التحقق غير صحيح أو انتهت صلاحيته" });
+
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null) return NotFound(new { status = "error", message = "المستخدم غير موجود" });
+
+                if (kind == "phone")
+                {
+                    if (await _context.Users.AnyAsync(u => u.PhoneNumber == newValue && u.Id != user.Id))
+                        return BadRequest(new { status = "error", message = "رقم الهاتف مستخدم بالفعل" });
+                    user.PhoneNumber = newValue;
+                    var r = await _userManager.UpdateAsync(user);
+                    if (!r.Succeeded) return BadRequest(new { status = "error", message = "تعذر تحديث رقم الهاتف" });
+                    return Ok(new { status = "success", message = "تم تحديث رقم الهاتف", phone = newValue });
+                }
+
+                if (await _userManager.FindByNameAsync(newValue) != null)
+                    return BadRequest(new { status = "error", message = "البريد الإلكتروني مستخدم بالفعل" });
+                var e1 = await _userManager.SetEmailAsync(user, newValue);
+                var e2 = await _userManager.SetUserNameAsync(user, newValue);
+                if (!e1.Succeeded || !e2.Succeeded)
+                    return BadRequest(new { status = "error", message = "تعذر تحديث البريد الإلكتروني" });
+                user.EmailConfirmed = true;
+                await _userManager.UpdateAsync(user);
+
+                var roles = await _userManager.GetRolesAsync(user);
+                var token = _jwtService.CreateToken(user, roles);
+                var refreshToken = new RefreshToken { Token = GenerateRefreshToken(), Expires = DateTime.UtcNow.AddDays(7), DeviceId = CurrentDeviceId(), UserId = user.Id };
+                await _context.RefreshTokens.AddAsync(refreshToken);
+                await _context.SaveChangesAsync();
+                return Ok(new { status = "success", message = "تم تحديث البريد الإلكتروني", email = newValue, token, refreshToken = refreshToken.Token });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء تحديث البيانات" });
+            }
+        }
+
+        #endregion
+
         #region Settings & Preferences Endpoints
 
         [Authorize]
@@ -952,10 +1241,38 @@ namespace Berwah.Controllers
             var user = await _userManager.FindByIdAsync(userId!);
             if (user == null) return NotFound();
 
+            // A hard delete fails as soon as the account has orders, ads, chats...
+            // (foreign keys), so the account is closed instead: its personal data is
+            // wiped, it can no longer sign in, and the e-mail / phone are free again.
+            // The orders and ads stay (as "deleted account") so other people's history
+            // and the stores' books remain correct.
+            var tag = $"deleted_{user.Id}";
+            user.UserName = tag;
+            user.NormalizedUserName = tag.ToUpperInvariant();
+            user.Email = $"{tag}@deleted.local";
+            user.NormalizedEmail = user.Email.ToUpperInvariant();
+            user.PhoneNumber = tag;
+            user.PasswordHash = null;
+            user.SecurityStamp = Guid.NewGuid().ToString();
+            user.FirstName = "حساب";
+            user.SecondName = "محذوف";
+            user.ThirdName = "";
+            user.LastName = "";
+            user.ProfileImageUrl = null;
+            user.Address = "";
+            user.IsFrozen = true;
+            user.IsVerified = false;
+            user.PushNotificationEnable = false;
+            user.LockoutEnabled = true;
+            user.LockoutEnd = DateTimeOffset.MaxValue;
 
-            var result = await _userManager.DeleteAsync(user);
+            var result = await _userManager.UpdateAsync(user);
             if (!result.Succeeded)
-                return BadRequest(new { status = "error", message = "فشل حذف الحساب" });
+                return BadRequest(new { status = "error", message = "فشل حذف الحساب", details = string.Join(" | ", result.Errors.Select(e => e.Description)) });
+
+            _context.RefreshTokens.RemoveRange(_context.RefreshTokens.Where(t => t.UserId == user.Id));
+            _context.DeviceTokens.RemoveRange(_context.DeviceTokens.Where(d => d.UserId == user.Id));
+            await _context.SaveChangesAsync();
 
             return Ok(new { status = "success", message = "تم حذف الحساب نهائياً" });
         }
@@ -987,69 +1304,38 @@ namespace Berwah.Controllers
             {
                 var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-                // 1. جلب بيانات الطلبات المحددة فقط وتفادي مشكلة الـ Nulls في الجدول
                 var orders = await _context.Orders
-                    .AsNoTracking()
                     .Where(o => o.UserId == userId)
-                    .Select(o => new
-                    {
-                        o.Id,
-                        o.ConditionStaus,
-                        o.TotalPrice,
-                        o.CreatedAt
-                    })
                     .OrderByDescending(o => o.CreatedAt)
                     .ToListAsync();
 
-                var orderRows = orders.Select(o => (
-                    CreatedAt: o.CreatedAt,
-                    Row: new UserTransactionDto
-                    {
-                        OrderId = o.Id,
-                        Title = $"طلب منتجات أو خدمات #{o.Id}",
-                        Status = string.IsNullOrEmpty(o.ConditionStaus) ? "قيد المعالجة" : o.ConditionStaus,
-                        Type = "Order",
-                        TotalPrice = (decimal)o.TotalPrice,
-                        TransactionDate = o.CreatedAt.ToString("yyyy-MM-dd hh:mm tt")
-                    }
-                ));
+                var orderRows = orders.Select(o => (o.CreatedAt, Row: new UserTransactionDto
+                {
+                    OrderId = o.Id,
+                    Title = $"طلب منتجات أو خدمات #{o.Id}",
+                    Status = o.ConditionStaus ?? "قيد المعالجة",
+                    TotalPrice = (decimal)o.TotalPrice,
+                    TransactionDate = o.CreatedAt.ToString("yyyy-MM-dd hh:mm tt")
+                }));
 
-                // 2. جلب الحركات المالية (Refunds)
-                var transactions = await _context.Transactions
-                    .AsNoTracking()
+                var refunds = await _context.Transactions
                     .Where(t => t.UserId == userId && t.Type == "Refund")
-                    .Select(t => new
-                    {
-                        t.Id,
-                        t.Description,
-                        t.Amount,
-                        t.CreatedAt
-                    })
                     .ToListAsync();
+                var refundRows = refunds.Select(t => (t.CreatedAt, Row: new UserTransactionDto
+                {
+                    OrderId = -t.Id,
+                    Title = t.Description,
+                    Status = "تم الاسترداد",
+                    Type = "Refund",
+                    TotalPrice = t.Amount,
+                    TransactionDate = t.CreatedAt.ToString("yyyy-MM-dd hh:mm tt")
+                }));
 
-                var refundRows = transactions.Select(t => (
-                    CreatedAt: t.CreatedAt,
-                    Row: new UserTransactionDto
-                    {
-                        OrderId = -t.Id,
-                        Title = string.IsNullOrEmpty(t.Description) ? "استرداد أموال" : t.Description,
-                        Status = "تم الاسترداد",
-                        Type = "Refund",
-                        TotalPrice = t.Amount,
-                        TransactionDate = t.CreatedAt.ToString("yyyy-MM-dd hh:mm tt")
-                    }
-                ));
-
-                // 3. الدمج والتنظيم النهائي
-                var result = orderRows
-                    .Concat(refundRows)
-                    .OrderByDescending(x => x.CreatedAt)
-                    .Select(x => x.Row)
-                    .ToList();
+                var result = orderRows.Concat(refundRows).OrderByDescending(x => x.CreatedAt).Select(x => x.Row).ToList();
 
                 return Ok(new { status = "success", data = result });
             }
-            catch (Exception ex)
+            catch(Exception ex)
             {
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }

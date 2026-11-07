@@ -1,4 +1,4 @@
-﻿using Berwah.BL.Service;
+using Berwah.BL.Service;
 using Berwah.BL.Service.IService;
 using Berwah.DAL.App;
 using Berwah.DAL.Repository;
@@ -43,9 +43,12 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IHomeService, HomeService>();
 builder.Services.AddScoped<IAdvertismentService, AdvertisementService>();
 builder.Services.AddScoped<IAdvertisementDetailService, AdvertisementDetailService>();
+builder.Services.AddScoped<Berwah.Services.AdPromotionService>();
+builder.Services.AddSingleton<Berwah.Services.GeoZoneService>();
 builder.Services.AddScoped<IMerchantService, MerchantService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ISupervisorForAdService, SupervisorForAdService>();
+builder.Services.AddScoped<ISupervisorForSRService, SupervisorForSRService>();
 
 
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
@@ -57,6 +60,7 @@ builder.Services.AddScoped<IAdvertisementRepository, AdvertisementRepository>();
 builder.Services.AddScoped<IMerchantRepository, MerchantRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<ISupervisorForAdRepository, SupervisorForAdRepository>();
+builder.Services.AddScoped<ISupervisorForSR, SupervisorForSRRepository>();
 
 
 builder.Services.AddSignalR();

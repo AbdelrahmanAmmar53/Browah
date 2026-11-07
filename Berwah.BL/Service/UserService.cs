@@ -30,6 +30,15 @@ namespace Berwah.BL.Service
             return code;
         }
 
+        /// <summary>Issues a fresh code for a pending OTP entry, keeping the stored registration data. Returns null if there is no pending entry.</summary>
+        public string? RegenerateOtp(string key)
+        {
+            if (!_otpStore.TryGetValue(key, out var data)) return null;
+            var code = new Random().Next(1000, 9999).ToString();
+            _otpStore[key] = (code, DateTime.UtcNow.AddMinutes(5), data.RegisterModel, data.UserType);
+            return code;
+        }
+
         public bool VerifyOtp(string key, string code, out object? registerModel, out string? userType)
         {
             registerModel = null;

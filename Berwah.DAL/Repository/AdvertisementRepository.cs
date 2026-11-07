@@ -1,5 +1,6 @@
 ﻿using Berwah.DAL.App;
 using Berwah.DAL.Repository.IRepository;
+using Berwah.Models.Enum;
 using Berwah.Models.Models;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -201,8 +202,9 @@ namespace Berwah.DAL.Repository
                 .Include(a => a.AdvertismentImages)
                     .ThenInclude(ai => ai.Image)
                 .Include(a => a.Specifications)
-                .Where(a => subCategoryIds.Contains(a.SubCategoryId))
-                .OrderByDescending(a => a.CreatedAt)
+                .Where(a => subCategoryIds.Contains(a.SubCategoryId) && (a.ExpiresAt == null || a.ExpiresAt > DateTime.UtcNow))
+                .OrderBy(a => (a.PromotionPlan == PromotionPlanType.VIP && a.PromotionEndsAt > DateTime.UtcNow) ? 0 : (a.PromotionPlan == PromotionPlanType.Featured && a.PromotionEndsAt > DateTime.UtcNow) ? 1 : 2)
+                .ThenByDescending(a => a.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .AsNoTracking()
@@ -217,8 +219,9 @@ namespace Berwah.DAL.Repository
                 .Include(a => a.AdvertismentImages)
                     .ThenInclude(ai => ai.Image)
                 .Include(a => a.Specifications)
-                .Where(a => a.CategoryId == categoryId)
-                .OrderByDescending(a => a.CreatedAt)
+                .Where(a => a.CategoryId == categoryId && (a.ExpiresAt == null || a.ExpiresAt > DateTime.UtcNow))
+                .OrderBy(a => (a.PromotionPlan == PromotionPlanType.VIP && a.PromotionEndsAt > DateTime.UtcNow) ? 0 : (a.PromotionPlan == PromotionPlanType.Featured && a.PromotionEndsAt > DateTime.UtcNow) ? 1 : 2)
+                .ThenByDescending(a => a.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .AsNoTracking()

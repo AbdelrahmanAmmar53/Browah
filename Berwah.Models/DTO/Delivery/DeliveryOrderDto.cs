@@ -11,6 +11,8 @@ namespace Berwah.Models.DTO.Delivery
         public int OrderId { get; set; }
         public string OrderNumber { get; set; } = string.Empty;
         public decimal TotalPrice { get; set; }
+        /// <summary>What the captain earns from this order (his share of the total), shown before he accepts.</summary>
+        public decimal EarningAmount { get; set; }
         public string Currency { get; set; } = "ج.م";
         public string OrderType { get; set; } = string.Empty; 
         public string CategoryBadge { get; set; } = string.Empty; 

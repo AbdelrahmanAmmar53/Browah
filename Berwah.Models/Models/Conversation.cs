@@ -28,6 +28,8 @@ namespace Berwah.Models.Models
         public Conversation Conversation { get; set; } = null!;
         public int SenderId { get; set; }
         public string Text { get; set; } = string.Empty;
+        /// <summary>A photo sent in the chat (the text may then be empty).</summary>
+        public string? ImageUrl { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? ReadAt { get; set; }
     }

@@ -196,7 +196,7 @@ namespace Berwah.Controllers
                 var (request, providerId) = await LoadJobAsync(requestId);
                 if (request == null || providerId != CurrentUserId)
                     return NotFound(new { status = "error", message = "المهمة غير موجودة" });
-                if (request.Status != ServiceRequestStatus.Accepted)
+                if (request.Status != ServiceRequestStatus.Approved)
                     return BadRequest(new { status = "error", message = "لا يمكن بدء هذه المهمة الآن" });
 
                 request.Status = ServiceRequestStatus.InProgress;
@@ -224,7 +224,7 @@ namespace Berwah.Controllers
                 var (request, providerId) = await LoadJobAsync(requestId);
                 if (request == null || providerId != CurrentUserId)
                     return NotFound(new { status = "error", message = "المهمة غير موجودة" });
-                if (request.Status != ServiceRequestStatus.Accepted && request.Status != ServiceRequestStatus.InProgress)
+                if (request.Status != ServiceRequestStatus.Approved && request.Status != ServiceRequestStatus.InProgress)
                     return BadRequest(new { status = "error", message = "لا يمكن إنهاء هذه المهمة الآن" });
 
                 request.Status = ServiceRequestStatus.InProgress;
@@ -340,6 +340,46 @@ namespace Berwah.Controllers
             }
         }
 
+        /// <summary>
+        /// The customer cancels a request nobody has offered on: it is deleted for good (the request,
+        /// its chat and any withdrawn offers). Once someone has offered, or a provider was chosen, it can't be.
+        /// </summary>
+        [HttpDelete("{requestId}")]
+        public async Task<IActionResult> CancelRequest(int requestId)
+        {
+            try
+            {
+                var request = await _context.ServiceRequests
+                    .FirstOrDefaultAsync(r => r.Id == requestId && r.UserId == CurrentUserId);
+                if (request == null)
+                    return NotFound(new { status = "error", message = "الخدمة غير موجودة" });
+                if (request.Status != ServiceRequestStatus.Pending || request.AcceptedOfferId != null)
+                    return BadRequest(new { status = "error", message = "لا يمكن إلغاء الخدمة بعد اختيار مقدم خدمة" });
+
+                var offers = await _context.ServiceOffers.Where(o => o.ServiceRequestId == requestId).ToListAsync();
+                if (offers.Any(o => !o.Withdrawn))
+                    return BadRequest(new { status = "error", message = "فيه عروض مقدمة على الخدمة، لا يمكن إلغاؤها الآن" });
+
+                // Chats about this request (Kind 1) go with it.
+                var chats = await _context.Conversations.Where(c => c.Kind == 1 && c.RefId == requestId).ToListAsync();
+                if (chats.Count > 0)
+                {
+                    var chatIds = chats.Select(c => c.Id).ToList();
+                    _context.ChatMessages.RemoveRange(_context.ChatMessages.Where(m => chatIds.Contains(m.ConversationId)));
+                    _context.Conversations.RemoveRange(chats);
+                }
+                _context.ServiceOffers.RemoveRange(offers);
+                _context.ServiceRequests.Remove(request);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { status = "success", message = "تم إلغاء الخدمة وحذفها" });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ غير متوقع، حاول مرة أخرى" });
+            }
+        }
+
         /// <summary>The chosen provider backs out of a job that is not finished yet.</summary>
         [HttpPost("{requestId}/withdraw")]
         public async Task<IActionResult> Withdraw(int requestId)
@@ -349,7 +389,7 @@ namespace Berwah.Controllers
                 var (request, providerId) = await LoadJobAsync(requestId);
                 if (request == null || providerId != CurrentUserId)
                     return NotFound(new { status = "error", message = "المهمة غير موجودة" });
-                if ((request.Status != ServiceRequestStatus.Accepted && request.Status != ServiceRequestStatus.InProgress)
+                if ((request.Status != ServiceRequestStatus.Approved && request.Status != ServiceRequestStatus.InProgress)
                     || request.ProviderDoneAt != null)
                     return BadRequest(new { status = "error", message = "لا يمكن الاعتذار عن هذه المهمة الآن" });
 
@@ -371,7 +411,7 @@ namespace Berwah.Controllers
                 var (request, providerId) = await LoadJobAsync(requestId);
                 if (request == null || request.UserId != CurrentUserId || providerId == null)
                     return NotFound(new { status = "error", message = "الطلب غير موجود" });
-                if (request.Status != ServiceRequestStatus.Accepted)
+                if (request.Status != ServiceRequestStatus.Approved)
                     return BadRequest(new { status = "error", message = "لا يمكن تغيير مقدم الخدمة بعد بدء التنفيذ" });
 
                 await ReopenAsync(request, providerId.Value, byCustomer: true);
@@ -400,7 +440,7 @@ namespace Berwah.Controllers
                     return BadRequest(new { status = "error", message = "تم اختيار منفذ لهذا الطلب بالفعل أو أنه لم يعد متاحًا" });
 
                 request.AcceptedOfferId = offer.Id;
-                request.Status = ServiceRequestStatus.Accepted;
+                request.Status = ServiceRequestStatus.Approved;
                 await _context.SaveChangesAsync();
 
                 await _notificationService.SendNotificationAsync(new SendNotification

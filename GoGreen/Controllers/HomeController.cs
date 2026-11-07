@@ -1,11 +1,12 @@
 ﻿using Berwah.BL.Service.IService;
 using Berwah.DAL.App;
-using Microsoft.EntityFrameworkCore;
 using Berwah.Models.DTO;
 using Berwah.Models.DTO.Service;
+using Berwah.Models.Enum;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace Berwah.Controllers
@@ -89,35 +90,32 @@ namespace Berwah.Controllers
             return Ok(new { status = "success", message = "تم إرسال طلبك مع المرفق بنجاح" });
         }
 
-        
+
         [HttpGet("available-service-requests")]
         public async Task<IActionResult> GetAvailableServiceRequests([FromQuery] int? subCategoryId)
         {
-            var requests = (await _homeService.GetAvailableRequestsForProvidersAsync(subCategoryId)).ToList();
+            // 🟢 تعديل: جلب الطلبات المعتمدة من المشرف فقط
+            var requests = (await _homeService.GetAvailableRequestsForProvidersAsync(subCategoryId))
+                .Where(r => r.Status == ServiceRequestStatus.Approved)
+                .ToList();
 
-            // Mark the requests this account already offered on, so a refresh keeps showing it.
-            if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var me) && requests.Count > 0)
-            {
-                var ids = requests.Select(r => r.Id).ToList();
-                var mine = await _db.ServiceOffers.AsNoTracking()
-                    .Where(o => o.ProviderId == me && ids.Contains(o.ServiceRequestId))
-                    .Select(o => o.ServiceRequestId).Distinct().ToListAsync();
-                var set = mine.ToHashSet();
-                foreach (var r in requests) r.HasMyOffer = set.Contains(r.Id);
-            }
-
+            await MarkMyOffersAsync(requests);
             return Ok(new { status = "success", data = requests });
         }
 
-       
         [HttpGet("all-service-requests")]
         public async Task<IActionResult> GetAllServiceRequests()
         {
-            var requests = await _homeService.GetAllServiceRequestsAsync();
+            // 🟢 تعديل: جلب الطلبات المعتمدة من المشرف فقط
+            var requests = (await _homeService.GetAllServiceRequestsAsync())
+                .Where(r => r.Status == ServiceRequestStatus.Approved)
+                .ToList();
+
+            await MarkMyOffersAsync(requests);
             return Ok(new { status = "success", data = requests });
         }
 
-        
+
         [HttpPost("submit-offer")]
         public async Task<IActionResult> SubmitServiceOffer([FromForm] CreateServiceOfferDto dto)
         {
@@ -152,6 +150,18 @@ namespace Berwah.Controllers
                     details = innerMessage
                 });
             }
+        }
+
+        /// <summary>Marks the requests this account already offered on, so a refresh keeps showing it.</summary>
+        private async Task MarkMyOffersAsync(IList<Berwah.Models.DTO.Service.ServiceRequestDto> requests)
+        {
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var me) || requests.Count == 0) return;
+            var ids = requests.Select(r => r.Id).ToList();
+            var mine = await _db.ServiceOffers.AsNoTracking()
+                .Where(o => o.ProviderId == me && ids.Contains(o.ServiceRequestId))
+                .Select(o => o.ServiceRequestId).Distinct().ToListAsync();
+            var set = mine.ToHashSet();
+            foreach (var r in requests) r.HasMyOffer = set.Contains(r.Id);
         }
     }
 }

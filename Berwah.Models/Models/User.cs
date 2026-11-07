@@ -20,10 +20,13 @@ namespace Berwah.Models.Models
         public string? PreviousExperience { get; set; }
         public string? VehicleType { get; set; }
         public string? NationalIdImageUrl { get; set; }
+        public string? NationalIdBackImageUrl { get; set; }
         public string? DrivingLicenseImageUrl { get; set; }
         public string? CriminalRecordImageUrl { get; set; }
         public string? VehicleImageUrl { get; set; }
         public string? ProfileImageUrl { get; set; }
+
+        public string? CommercialRegister { get; set; }
 
         public double Rating { get; set; } = 0;
 

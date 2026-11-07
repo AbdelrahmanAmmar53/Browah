@@ -25,6 +25,9 @@ namespace Berwah.BL.Service
             var ticket = new Ticket
             {
                 UserId = userId,
+                Name = dto.Name,
+                Email = dto.Email,
+                PhoneNumber = dto.PhoneNumber,
                 Title = dto.Title,
                 Description = dto.Description,
                // TicketNumber = $"BM-{Random.Shared.Next(10000, 99999)}",

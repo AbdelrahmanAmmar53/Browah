@@ -1,14 +1,17 @@
-﻿using Berwah.BL.Service.IService;
+using Berwah.BL.Service.IService;
 using Berwah.Models.DTO;
 using Berwah.Models.DTO.SupervisorForAd;
 using Berwah.Models.Enum;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Berwah.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "Admin,SupervisorForAd,BossOfSupervisor")]
     public class SupervisorForAdController : ControllerBase
     {
         private readonly ISupervisorForAdService _supervisorService;
@@ -122,6 +125,57 @@ namespace Berwah.Controllers
             {
                 return StatusCode(500, new { status = "error", message = ex.Message });
             }
+        }
+
+        // 10. جلب بيانات الملف الشخصي للمشرف والمؤشرات الرقابية
+        [HttpGet("profile")]
+        public async Task<IActionResult> GetSupervisorProfile()
+        {
+            var supervisorId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var profile = await _supervisorService.GetSupervisorProfileAsync(supervisorId);
+
+            if (profile == null)
+                return NotFound(new { status = "error", message = "المشرف غير موجود" });
+
+            return Ok(new { status = "success", data = profile });
+        }
+
+        // 11. تبديل حالة التواجد الميداني (متاح/غير متاح للفحص)
+        [HttpPost("toggle-availability")]
+        public async Task<IActionResult> ToggleAvailability([FromBody] ToggleAvailabilityDto dto)
+        {
+            var supervisorId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var success = await _supervisorService.ToggleAvailabilityAsync(supervisorId, dto.IsAvailable);
+
+            if (!success)
+                return BadRequest(new { status = "error", message = "فشل تحديث حالة التواجد" });
+
+            return Ok(new { status = "success", message = "تم تحديث الحالة الميدانية بنجاح" });
+        }
+
+        // 12. جلب محفظة المشرف والبيانات المالية والمعاملات الأخيرة
+        [HttpGet("wallet")]
+        public async Task<IActionResult> GetSupervisorWallet()
+        {
+            var supervisorId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var wallet = await _supervisorService.GetSupervisorWalletAsync(supervisorId);
+
+            return Ok(new { status = "success", data = wallet });
+        }
+
+        // 13. طلب سحب المستحقات المالية
+        [HttpPost("wallet/withdraw")]
+        public async Task<IActionResult> RequestWithdrawal([FromBody] WithdrawalRequestDtoAdmin dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            var supervisorId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var success = await _supervisorService.RequestWithdrawalAsync(supervisorId, dto);
+
+            if (!success)
+                return BadRequest(new { status = "error", message = "فشل تنفيذ طلب السحب، تأكد من المبلغ" });
+
+            return Ok(new { status = "success", message = "تم تقديم طلب السحب المالي بنجاح وجاري المعالجة" });
         }
     }
 }

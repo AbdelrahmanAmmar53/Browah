@@ -1,4 +1,4 @@
-﻿using Berwah.BL.Service.IService;
+using Berwah.BL.Service.IService;
 using Berwah.DAL.Repository.IRepository;
 using Berwah.Models.DTO;
 using Berwah.Models.Enum;
@@ -36,7 +36,8 @@ namespace Berwah.BL.Service
                 Condition = dto.Condition,
                 Governorate = dto.Governorate,
                 City = dto.City,
-                Status = AdStatus.Pending,
+                Status = AdPromotionRules.AutoApproveAds ? AdStatus.Approved : AdStatus.Pending,
+                ExpiresAt = AdPromotionRules.AutoApproveAds ? DateTime.UtcNow.AddDays(AdPromotionRules.AdLifetimeDays) : null,
                 CategoryId = dto.CategoryId,
                 SubCategoryId = dto.SubCategoryId,
                 PromotionPlan = dto.PromotionPlan,
@@ -90,7 +91,14 @@ namespace Berwah.BL.Service
                 ad.Specifications.Add(spec);
             }
 
-            try { await _notifications.SendNotificationAsync(new SendNotification { UserId = userId, Title = "تم استلام إعلانك", Message = $"إعلانك «{ad.Title}» قيد المراجعة وسيصلك إشعار عند اعتماده." }); } catch { }
+            try
+            {
+                var (title, message) = AdPromotionRules.AutoApproveAds
+                    ? ("تم نشر إعلانك ✅", $"إعلانك «{ad.Title}» أصبح منشورًا الآن.")
+                    : ("تم استلام إعلانك", $"إعلانك «{ad.Title}» قيد المراجعة وسيصلك إشعار عند اعتماده.");
+                await _notifications.SendNotificationAsync(new SendNotification { UserId = userId, Title = title, Message = message });
+            }
+            catch { }
 
             return MapToResponseDto(ad);
         }
@@ -154,7 +162,9 @@ namespace Berwah.BL.Service
                 City = ad.City,
                 CategoryId = ad.CategoryId,
                 SubCategoryId = ad.SubCategoryId,
-                PromotionPlan = ad.PromotionPlan.ToString(),
+                PromotionPlan = ad.EffectivePlan.ToString(),
+                PromotionEndsAt = ad.PromotionEndsAt,
+                ExpiresAt = ad.ExpiresAt,
                 ImageUrls = ad.AdvertismentImages.Select(ai => ai.Image!.Url).ToList(),
 
                 Specifications = ad.Specifications?.Select(s => new SpecificationItemDto

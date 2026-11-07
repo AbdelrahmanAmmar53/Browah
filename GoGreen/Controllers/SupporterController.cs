@@ -23,7 +23,7 @@ namespace Berwah.Controllers
         public async Task<IActionResult> CreateTicket([FromBody] CreateTicket dto)
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            int? userId = int.TryParse(userIdClaim, out var id) ? id : null;
+            int? userId = int.TryParse(userIdClaim, out var id) ? id : (int?)null;
 
             var result = await _supporterService.CreateTicketAsync(userId, dto);
             return Ok(new { status = "success", message = "تم إنشاء التذكرة بنجاح", data = result });

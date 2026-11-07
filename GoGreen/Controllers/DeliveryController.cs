@@ -94,6 +94,7 @@ namespace Berwah.Controllers
                     documents = new
                     {
                         nationalIdImage = captain.NationalIdImageUrl,
+                        nationalIdBackImage = captain.NationalIdBackImageUrl,
                         drivingLicenseImage = captain.DrivingLicenseImageUrl,
                         criminalRecordImage = captain.CriminalRecordImageUrl,
                         isDocumentsVerified = captain.IsVerified
@@ -140,9 +141,23 @@ namespace Berwah.Controllers
         }
         #endregion
 
+        // True when every store of the order (that has a known place) is within [radiusKm] of the captain.
+        // An order whose stores have no place on file can't be judged, so it is kept.
+        private static bool IsInWorkArea(Order o, double lat, double lng, double radiusKm)
+        {
+            var places = o.OrderItems
+                .Where(oi => oi.Product?.User != null && oi.MerchantStatus != OrderStatus.Cancelled)
+                .Select(oi => oi.Product!.User!)
+                .Where(u => u.Latitude != 0 || u.Longitude != 0)
+                .GroupBy(u => u.Id).Select(g => g.First())
+                .ToList();
+            if (places.Count == 0) return true;
+            return places.All(u => OrderFlow.DistanceKm(lat, lng, u.Latitude, u.Longitude) <= radiusKm);
+        }
+
         // One order as the radar and the trip show it. The courier's own position (when the app sent it)
         // gives the distance to the store; without positions no distance is shown rather than a made-up one.
-        private DeliveryOrderDto BuildOrderDto(Order o, double? courierLat, double? courierLng)
+        private DeliveryOrderDto BuildOrderDto(Order o, double? courierLat, double? courierLng, decimal share = 0.15m)
         {
             // The stores the order is picked up from (one per merchant in the cart).
             var stops = o.OrderItems
@@ -183,15 +198,20 @@ namespace Berwah.Controllers
             string pickupDistance = pickup.HasValue && hasCourier
                 ? $"يبعد {OrderFlow.DistanceKm(courierLat!.Value, courierLng!.Value, pickup.Value.Lat, pickup.Value.Lng):F1} كم عن موقعك"
                 : string.Empty;
-            string tripDistance = pickup.HasValue && dropoff.HasValue
-                ? $"{OrderFlow.DistanceKm(pickup.Value.Lat, pickup.Value.Lng, dropoff.Value.Lat, dropoff.Value.Lng):F1} كم رحلة التوصيل"
-                : string.Empty;
+            // The customer: how far from the captain, and how long the delivery leg is (store -> customer).
+            var tripParts = new List<string>();
+            if (dropoff.HasValue && hasCourier)
+                tripParts.Add($"يبعد {OrderFlow.DistanceKm(courierLat!.Value, courierLng!.Value, dropoff.Value.Lat, dropoff.Value.Lng):F1} كم عن موقعك");
+            if (pickup.HasValue && dropoff.HasValue)
+                tripParts.Add($"{OrderFlow.DistanceKm(pickup.Value.Lat, pickup.Value.Lng, dropoff.Value.Lat, dropoff.Value.Lng):F1} كم رحلة التوصيل");
+            string tripDistance = string.Join("\n", tripParts);
 
             return new DeliveryOrderDto
             {
                 OrderId = o.Id,
                 OrderNumber = $"ORD-{o.Id}",
                 TotalPrice = (decimal)o.TotalPrice,
+                EarningAmount = Math.Round((decimal)o.TotalPrice * share, 2),
                 Currency = "ج.م",
                 OrderType = "توصيل طلبات متجر",
                 CategoryBadge = "نشط",
@@ -218,7 +238,7 @@ namespace Berwah.Controllers
 
         [Authorize(Roles = "Delivery")]
         [HttpGet("AvailableOrders")]
-        public async Task<IActionResult> GetAvailableOrders([FromQuery] double? lat = null, [FromQuery] double? lng = null)
+        public async Task<IActionResult> GetAvailableOrders([FromQuery] double? lat = null, [FromQuery] double? lng = null, [FromQuery] double? radiusKm = null)
         {
             try
             {
@@ -240,6 +260,15 @@ namespace Berwah.Controllers
                 // sees the order; other items can be taken right away.
                 orders = orders.Where(OrderFlow.IsReadyForCouriers).ToList();
 
+                // The captain's work area: only orders whose stores are within [radiusKm] of him.
+                if (radiusKm.HasValue && radiusKm.Value > 0)
+                {
+                    radiusKm = Math.Min(radiusKm.Value, 30); // the work area never goes past 30 km
+                    if (!lat.HasValue || !lng.HasValue)
+                        return Ok(new { status = "success", activeCount = 0, needsLocation = true, data = new List<DeliveryOrderDto>() });
+                    orders = orders.Where(o => IsInWorkArea(o, lat.Value, lng.Value, radiusKm.Value)).ToList();
+                }
+
                 // The moment an order first shows on a radar starts the clock for the captains' response time.
                 var firstSeen = orders.Where(o => o.FirstOfferedAt == null).ToList();
                 if (firstSeen.Count > 0)
@@ -248,7 +277,8 @@ namespace Berwah.Controllers
                     await _context.SaveChangesAsync();
                 }
 
-                var availableOrders = orders.Select(o => BuildOrderDto(o, lat, lng)).ToList();
+                var share = await GetCourierShareAsync();
+                var availableOrders = orders.Select(o => BuildOrderDto(o, lat, lng, share)).ToList();
                 return Ok(new { status = "success", activeCount = availableOrders.Count, data = availableOrders });
             }
             catch (Exception)
@@ -277,7 +307,7 @@ namespace Berwah.Controllers
             return Ok(new
             {
                 status = "success",
-                data = BuildOrderDto(order, lat, lng),
+                data = BuildOrderDto(order, lat, lng, await GetCourierShareAsync()),
                 pickedUp = order.Status == OrderStatus.OutForDelivery,
                 pickedMerchantIds = picked
             });
@@ -598,6 +628,90 @@ namespace Berwah.Controllers
 
         #endregion
 
+        // Everything about one order for the captain: the items, the stores, the customer, the money
+        // and the distances. Open for an order still on the radar or one this captain took.
+        [Authorize(Roles = "Delivery")]
+        [HttpGet("orders/{orderId}/details")]
+        public async Task<IActionResult> GetOrderDetails(int orderId, [FromQuery] double? lat = null, [FromQuery] double? lng = null)
+        {
+            try
+            {
+                var me = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var o = await _context.Orders.AsNoTracking()
+                    .Include(x => x.User)
+                    .Include(x => x.OrderItems).ThenInclude(i => i.Product).ThenInclude(p => p.User)
+                    .FirstOrDefaultAsync(x => x.Id == orderId);
+                if (o == null || (o.DeliveryId != null && o.DeliveryId != me))
+                    return NotFound(new { status = "error", message = "الطلب غير موجود أو مش متاح ليك" });
+
+                var mine = o.DeliveryId == me;
+                var share = await GetCourierShareAsync();
+                bool has = lat.HasValue && lng.HasValue;
+                double? Km(double aLat, double aLng, double bLat, double bLng) =>
+                    (aLat == 0 && aLng == 0) || (bLat == 0 && bLng == 0)
+                        ? null : Math.Round(OrderFlow.DistanceKm(aLat, aLng, bLat, bLng), 1);
+                static string StoreName(User u) => string.IsNullOrWhiteSpace(u.BusinessName) ? $"{u.FirstName} {u.LastName}".Trim() : u.BusinessName!;
+
+                var live = o.OrderItems.Where(i => i.Product != null && i.Product.User != null && i.MerchantStatus != OrderStatus.Cancelled).ToList();
+                var items = live.Select(i => new
+                {
+                    name = i.Product!.Name,
+                    quantity = i.Quantity,
+                    price = i.Price,
+                    lineTotal = i.Price * i.Quantity,
+                    store = StoreName(i.Product.User!),
+                    imageUrl = i.Product.ImageUrl
+                }).ToList();
+
+                var stores = live.GroupBy(i => i.Product!.UserId).Select(g =>
+                {
+                    var u = g.First().Product!.User!;
+                    return new
+                    {
+                        name = StoreName(u),
+                        address = u.Address ?? string.Empty,
+                        itemsCount = g.Sum(x => x.Quantity),
+                        fromYouKm = has ? Km(lat!.Value, lng!.Value, u.Latitude, u.Longitude) : null,
+                        toCustomerKm = Km(u.Latitude, u.Longitude, o.DropoffLatitude, o.DropoffLongitude)
+                    };
+                }).ToList();
+
+                var itemsTotal = live.Sum(i => i.Price * i.Quantity);
+                var total = (decimal)o.TotalPrice;
+                var customer = o.User;
+                var data = new
+                {
+                    orderId = o.Id,
+                    orderNumber = $"ORD-{o.Id}",
+                    status = o.Status.ToString(),
+                    mine,
+                    createdAt = o.CreatedAt.ToString("dd/MM/yyyy hh:mm tt", System.Globalization.CultureInfo.InvariantCulture),
+                    paymentMethod = o.PaymentMethod.ToString(),
+                    isCash = o.PaymentMethod == PaymentMethod.Cash,
+                    items,
+                    stores,
+                    customer = new
+                    {
+                        // The full name and the phone only once the captain took the order.
+                        name = customer == null ? string.Empty : mine ? $"{customer.FirstName} {customer.LastName}".Trim() : customer.FirstName,
+                        phone = mine ? customer?.PhoneNumber : null,
+                        address = o.DropoffAddress ?? string.Empty,
+                        fromYouKm = has ? Km(lat!.Value, lng!.Value, o.DropoffLatitude, o.DropoffLongitude) : null
+                    },
+                    itemsTotal,
+                    deliveryFee = Math.Max(0m, total - itemsTotal),
+                    total,
+                    earning = Math.Round(total * share, 2),
+                    cashToCollect = o.PaymentMethod == PaymentMethod.Cash ? total : 0m
+                };
+                return Ok(new { status = "success", data });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ غير متوقع، حاول مرة أخرى" });
+            }
+        }
+
         #region Trip history, documents and problem reports
 
         // Every order the captain delivered, newest first, a page at a time.
@@ -641,7 +755,28 @@ namespace Berwah.Controllers
                 };
             }).ToList();
 
-            return Ok(new { status = "success", data, hasMore = orders.Count > pageSize });
+            // How many trips: all time, today, the last 7 days and this month (Egypt time).
+            object? counts = null;
+            if (page == 1)
+            {
+                var dates = await _context.Orders.AsNoTracking()
+                    .Where(o => o.DeliveryId == me && o.Status == OrderStatus.Delivered)
+                    .Select(o => o.DeliveredAt ?? o.CreatedAt)
+                    .ToListAsync();
+                var now = DateTime.UtcNow.AddHours(2);
+                var today = now.Date;
+                var monthStart = new DateTime(now.Year, now.Month, 1);
+                var local = dates.Select(d => d.AddHours(2)).ToList();
+                counts = new
+                {
+                    total = local.Count,
+                    today = local.Count(d => d >= today),
+                    week = local.Count(d => d >= today.AddDays(-6)),
+                    month = local.Count(d => d >= monthStart)
+                };
+            }
+
+            return Ok(new { status = "success", data, hasMore = orders.Count > pageSize, counts });
         }
 
         // Replaces one of the captain's pictures: national, license, criminal or vehicle.
@@ -766,6 +901,7 @@ namespace Berwah.Controllers
             var percent = (await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync())?.CourierSharePercentage ?? 0m;
             return (percent > 0 ? percent : 15m) / 100m;
         }
+        private const decimal MinCourierWithdrawal = 200m;
         private const string WithdrawType = "CourierWithdrawal";
         private const string DepositType = "CourierCashDeposit";
 
@@ -874,12 +1010,13 @@ namespace Berwah.Controllers
 
                 var settings = await _context.SystemSettings.FirstOrDefaultAsync();
                 decimal companyFee = settings?.WithdrawalFeeFixed ?? 0m;
-                decimal minimum = settings?.MinWithdrawalAmount ?? 0m;
+                // A captain can't withdraw less than 200 (the admin's setting can only raise it).
+                decimal minimum = Math.Max(MinCourierWithdrawal, settings?.MinWithdrawalAmount ?? 0m);
 
                 if (model.Amount <= companyFee)
                     return BadRequest(new { status = "error", message = "مبلغ السحب يجب أن يكون أكبر من رسوم السحب المقرر" });
                 if (model.Amount < minimum)
-                    return BadRequest(new { status = "error", message = "مبلغ السحب أقل من الحد الأدنى" });
+                    return BadRequest(new { status = "error", message = $"أقل مبلغ للسحب {minimum:0.##} ج" });
 
                 var w = await LoadWalletAsync(captainId);
                 if (model.Amount > w.Available)

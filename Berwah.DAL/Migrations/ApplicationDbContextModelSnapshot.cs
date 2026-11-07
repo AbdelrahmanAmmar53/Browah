@@ -22,6 +22,53 @@ namespace Berwah.DAL.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("Berwah.Models.Models.AdPromotionPurchase", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AdvertismentId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Plan")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdvertismentId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("AdPromotionPurchases");
+                });
+
             modelBuilder.Entity("Berwah.Models.Models.AdvertisementReview", b =>
                 {
                     b.Property<int>("Id")
@@ -125,6 +172,9 @@ namespace Berwah.DAL.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Governorate")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -143,6 +193,9 @@ namespace Berwah.DAL.Migrations
 
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("PromotionEndsAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("PromotionPlan")
                         .HasColumnType("int");
@@ -250,6 +303,9 @@ namespace Berwah.DAL.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("ReadAt")
                         .HasColumnType("datetime2");
@@ -746,6 +802,9 @@ namespace Berwah.DAL.Migrations
                     b.Property<DateTime>("Created")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DeviceId")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("Expires")
                         .HasColumnType("datetime2");
 
@@ -1160,6 +1219,9 @@ namespace Berwah.DAL.Migrations
                     b.Property<string>("BusinessType")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("CommercialRegister")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("nvarchar(max)");
@@ -1229,6 +1291,9 @@ namespace Berwah.DAL.Migrations
 
                     b.Property<decimal?>("MinimumOrder")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("NationalIdBackImageUrl")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("NationalIdImageUrl")
                         .HasColumnType("nvarchar(max)");
@@ -1462,6 +1527,25 @@ namespace Berwah.DAL.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("Berwah.Models.Models.AdPromotionPurchase", b =>
+                {
+                    b.HasOne("Berwah.Models.Models.Advertisment", "Advertisment")
+                        .WithMany()
+                        .HasForeignKey("AdvertismentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Berwah.Models.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Advertisment");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.AdvertisementReview", b =>

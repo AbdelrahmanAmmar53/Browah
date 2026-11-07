@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -10,6 +10,8 @@ namespace Berwah.Models.Models
     {
         public int Id { get; set; }
         public string Token { get; set; } = string.Empty;
+        /// <summary>The phone this sign-in was made on (null for sign-ins made before this existed).</summary>
+        public string? DeviceId { get; set; }
         public DateTime Expires { get; set; }
         public bool IsExpired => DateTime.UtcNow >= Expires;
         public DateTime Created { get; set; }

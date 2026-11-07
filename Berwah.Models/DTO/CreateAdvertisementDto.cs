@@ -42,6 +42,13 @@ namespace Berwah.Models.DTO
         [Required]
         public PromotionPlanType PromotionPlan { get; set; } = PromotionPlanType.Free;
 
+        /// <summary>How the customer pays for a Featured / VIP plan; not needed for a free ad.</summary>
+        public AdPaymentMethod? PaymentMethod { get; set; }
+
+        /// <summary>Card last four digits, or the wallet / InstaPay number. Needed with a paid plan.</summary>
+        [MaxLength(100)]
+        public string? PaymentReference { get; set; }
+
         [Required(ErrorMessage = "يرجى إرفاق صورة واحدة على الأقل")]
         public List<IFormFile> Images { get; set; } = new();
 

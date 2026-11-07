@@ -1,5 +1,8 @@
 ﻿using Berwah.BL.Service.IService;
 using Berwah.Models.DTO;
+using Berwah.Models.Enum;
+using Berwah.Models.Models;
+using Berwah.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -13,13 +16,16 @@ namespace Berwah.Controllers
     {
         private readonly IAdvertismentService _advertisementService;
         private readonly IAdvertisementDetailService _advertisementDetailService;
+        private readonly AdPromotionService _promotions;
 
         public AdvertisementController(
             IAdvertismentService advertisementService,
-            IAdvertisementDetailService advertisementDetailService)
+            IAdvertisementDetailService advertisementDetailService,
+            AdPromotionService promotions)
         {
             _advertisementService = advertisementService;
             _advertisementDetailService = advertisementDetailService;
+            _promotions = promotions;
         }
 
         [Authorize]
@@ -32,10 +38,23 @@ namespace Berwah.Controllers
                 return Unauthorized(new { status = "fail", message = "غير مصرح لك بالوصول" });
             }
 
+            // Featured / VIP are for regular users and need a payment method; checked before anything is saved.
+            var paid = dto.PromotionPlan != PromotionPlanType.Free;
+            if (paid)
+            {
+                if (User.IsInRole("Merchant"))
+                    return StatusCode(403, new { status = "fail", message = "باقات الإعلانات متاحة للمستخدمين العاديين فقط" });
+                var invalid = AdPromotionService.Validate(dto.PromotionPlan, dto.PaymentMethod, dto.PaymentReference);
+                if (invalid != null)
+                    return BadRequest(new { status = "fail", message = invalid });
+            }
+
             try
             {
                 var result = await _advertisementService.CreateAdvertisementAsync(dto, userId);
-                return CreatedAtAction(nameof(GetAdvertisementById), new { id = result.Id }, new { status = "success", data = result });
+                if (paid)
+                    await _promotions.CreatePurchaseAsync(result.Id, userId, dto.PromotionPlan, dto.PaymentMethod!.Value, dto.PaymentReference);
+                return CreatedAtAction(nameof(GetAdvertisementById), new { id = result.Id }, new { status = "success", data = result, promotionPending = paid });
             }
             catch (Exception ex)
             {
