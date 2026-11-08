@@ -56,6 +56,37 @@ namespace Berwah.Controllers
 
         #region Helpers
 
+        /// <summary>
+        /// The ways one phone number can be stored: sign-up keeps the full international form (+201012345678)
+        /// while people type it as 01012345678, so a lookup tries every form.
+        /// </summary>
+        private static List<string> PhoneForms(string input)
+        {
+            var raw = (input ?? string.Empty).Trim();
+            var digits = new string(raw.Where(char.IsDigit).ToArray());
+            if (digits.StartsWith("00")) digits = digits[2..];
+            var forms = new HashSet<string> { raw };
+            if (digits.Length == 0) return forms.ToList();
+            forms.Add(digits);
+            forms.Add("+" + digits);
+            if (digits.StartsWith("20") && digits.Length == 12)
+            {
+                forms.Add("0" + digits[2..]);
+            }
+            else if (digits.StartsWith("0") && digits.Length == 11)
+            {
+                forms.Add("20" + digits[1..]);
+                forms.Add("+20" + digits[1..]);
+            }
+            return forms.ToList();
+        }
+
+        private async Task<User?> FindByPhoneAsync(string input)
+        {
+            var forms = PhoneForms(input);
+            return await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber != null && forms.Contains(u.PhoneNumber));
+        }
+
         private bool IsValidEmail(string email)
         {
             try
@@ -78,7 +109,7 @@ namespace Berwah.Controllers
             if (existingEmail != null)
                 return "البريد الإلكتروني مستخدم بالفعل";
 
-            var existingPhone = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNormalized);
+            var existingPhone = await FindByPhoneAsync(phoneNormalized);
             if (existingPhone != null)
                 return "رقم الهاتف مستخدم بالفعل";
 
@@ -568,13 +599,6 @@ namespace Berwah.Controllers
         
         #endregion
 
-        /// <summary>The phone's own id, sent by the app with every request.</summary>
-        private string? CurrentDeviceId()
-        {
-            var value = Request.Headers["X-Device-Id"].ToString().Trim();
-            if (value.Length == 0) return null;
-            return value.Length > 100 ? value[..100] : value;
-        }
 
         [HttpPost("RefreshToken")]
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequestDto model)
@@ -649,7 +673,7 @@ namespace Berwah.Controllers
 
                 var user = IsValidEmail(input)
                     ? await _userManager.FindByNameAsync(input.ToLower())
-                    : await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == input);
+                    : await FindByPhoneAsync(input);
 
                 if (user == null)
                     return Unauthorized(new { status = "error", message = "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
@@ -809,13 +833,10 @@ namespace Berwah.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(new { status = "error", message = "البيانات المدخلة غير صحيحة" });
 
-                var input = model.TargetEmail.Trim();
+                // The account is found by its email or its phone; the code always goes to the email on file.
+                var user = await FindForResetAsync(model.TargetEmail);
 
-                var user = IsValidEmail(input)
-                    ? await _userManager.FindByNameAsync(input.ToLower())
-                    : await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == input);
-
-                if (user == null)
+                if (user == null || string.IsNullOrWhiteSpace(user.Email))
                     return NotFound(new { status = "error", message = "المستخدم غير موجود" });
 
                 string key = $"ResetPassword:{user.Email!.Trim().ToLower()}";
@@ -837,7 +858,7 @@ namespace Berwah.Controllers
                     await _emailService.SendEmailAsync(user.Email, "رمز إعادة تعيين كلمة المرور - برواح", htmlMessage);
                 }
 
-                return Ok(new { status = "success", message = "تم إرسال رمز التحقق بنجاح", email = user.Email });
+                return Ok(new { status = "success", message = "تم إرسال رمز التحقق إلى بريدك المسجل", email = MaskEmail(user.Email!) });
             }
             catch (Exception ex)
             {
@@ -845,21 +866,42 @@ namespace Berwah.Controllers
             }
         }
 
+        // Codes that passed VerifyOtp, waiting for the new password (email -> code, expiry).
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Otp, DateTime Expiry)> _resetVerified = new();
+
+        private async Task<User?> FindForResetAsync(string? input)
+        {
+            input = (input ?? string.Empty).Trim();
+            if (input.Length == 0) return null;
+            return IsValidEmail(input)
+                ? await _userManager.FindByNameAsync(input.ToLower())
+                : await FindByPhoneAsync(input);
+        }
+
+        private static string MaskEmail(string email)
+        {
+            var at = email.IndexOf('@');
+            if (at <= 1) return email;
+            return email[0] + new string('*', Math.Min(at - 1, 6)) + email[at..];
+        }
+
         [HttpPost("VerifyOtp")]
         public async Task<IActionResult> VerifyOtp([FromBody] VerifyOTP model)
         {
             try
             {
-                var normalizedEmail = model.TargetEmail.Trim().ToLower();
+                var user = await FindForResetAsync(model.TargetEmail);
+                if (user == null || string.IsNullOrWhiteSpace(user.Email))
+                    return NotFound(new { status = "error", message = "المستخدم غير موجود" });
+
+                var normalizedEmail = user.Email.Trim().ToLower();
                 string key = $"ResetPassword:{normalizedEmail}";
                 var isValid = _userService.VerifyOtp(key, model.Otp, out _, out _);
 
                 if (!isValid)
                     return BadRequest(new { status = "error", message = "رمز التحقق غير صحيح أو انتهت صلاحيته" });
 
-                var user = await _userManager.FindByNameAsync(normalizedEmail);
-                if (user == null)
-                    return NotFound(new { status = "error", message = "المستخدم غير موجود" });
+                _resetVerified[normalizedEmail] = (model.Otp, DateTime.UtcNow.AddMinutes(10));
 
                 // إنشاء Reset Token مؤقت لإكماله في خطوة ResetPassword للأمان
                 var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
@@ -877,13 +919,17 @@ namespace Berwah.Controllers
         {
             try
             {
-                var normalizedEmail = model.TargetEmail.Trim().ToLower();
+                var user = await FindForResetAsync(model.TargetEmail);
 
-                var user = await _userManager.FindByNameAsync(normalizedEmail)
-                           ?? await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == model.TargetEmail.Trim());
-
-                if (user == null)
+                if (user == null || string.IsNullOrWhiteSpace(user.Email))
                     return NotFound(new { status = "error", message = "المستخدم غير موجود" });
+
+                // The new password is only accepted for a code that was just verified.
+                var verifiedKey = user.Email.Trim().ToLower();
+                if (!_resetVerified.TryGetValue(verifiedKey, out var verified)
+                    || verified.Expiry < DateTime.UtcNow
+                    || verified.Otp != (model.OTP ?? string.Empty))
+                    return BadRequest(new { status = "error", message = "رمز التحقق غير صحيح أو انتهت صلاحيته" });
 
                 var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
                 var result = await _userManager.ResetPasswordAsync(user, resetToken, model.NewPassword);
@@ -891,6 +937,7 @@ namespace Berwah.Controllers
                 if (!result.Succeeded)
                     return BadRequest(new { status = "error", message = "فشل تغيير كلمة المرور", errors = result.Errors.Select(e => e.Description) });
 
+                _resetVerified.TryRemove(verifiedKey, out _);
                 return Ok(new { status = "success", message = "تم تغيير كلمة المرور بنجاح" });
             }
             catch (Exception ex)
@@ -1241,11 +1288,6 @@ namespace Berwah.Controllers
             var user = await _userManager.FindByIdAsync(userId!);
             if (user == null) return NotFound();
 
-            // A hard delete fails as soon as the account has orders, ads, chats...
-            // (foreign keys), so the account is closed instead: its personal data is
-            // wiped, it can no longer sign in, and the e-mail / phone are free again.
-            // The orders and ads stay (as "deleted account") so other people's history
-            // and the stores' books remain correct.
             var tag = $"deleted_{user.Id}";
             user.UserName = tag;
             user.NormalizedUserName = tag.ToUpperInvariant();
@@ -1254,12 +1296,37 @@ namespace Berwah.Controllers
             user.PhoneNumber = tag;
             user.PasswordHash = null;
             user.SecurityStamp = Guid.NewGuid().ToString();
+
+            // البيانات الشخصية
             user.FirstName = "حساب";
             user.SecondName = "محذوف";
             user.ThirdName = "";
             user.LastName = "";
             user.ProfileImageUrl = null;
             user.Address = "";
+
+            // 🟢 تصفير ومسح بيانات المطعم / التجار لكي لا يظهر اسم المطعم القديم
+            user.BusinessName = "مطعم محذوف";
+            user.BusinessType = null;
+            user.TypeOfService = null;
+            user.BusinessSubCategoryIds = null;
+            user.BusinessDescription = null;
+            user.CommercialRegister = null;
+            user.ServiceName = null;
+            user.MinimumOrder = null;
+            user.WorkHours = null;
+            user.AcceptOrdersAutomatically = false;
+            user.PausedUntil = null;
+
+            // 🟢 تصفير بيانات الدليفري إن وجدت
+            user.VehiclePlateNumber = null;
+            user.VehicleType = null;
+            user.DrivingLicenseImageUrl = null;
+            user.CriminalRecordImageUrl = null;
+            user.VehicleImageUrl = null;
+            user.DrivingLicenseExpiry = null;
+
+            // الحالة والصلاحيات
             user.IsFrozen = true;
             user.IsVerified = false;
             user.PushNotificationEnable = false;
@@ -1271,12 +1338,15 @@ namespace Berwah.Controllers
                 return BadRequest(new { status = "error", message = "فشل حذف الحساب", details = string.Join(" | ", result.Errors.Select(e => e.Description)) });
 
             _context.RefreshTokens.RemoveRange(_context.RefreshTokens.Where(t => t.UserId == user.Id));
-            _context.DeviceTokens.RemoveRange(_context.DeviceTokens.Where(d => d.UserId == user.Id));
+
+            // إذا كان جدول الـ DeviceTokens موجود عندك
+            var deviceTokens = _context.Set<DeviceToken>().Where(d => d.UserId == user.Id);
+            _context.RemoveRange(deviceTokens);
+
             await _context.SaveChangesAsync();
 
             return Ok(new { status = "success", message = "تم حذف الحساب نهائياً" });
         }
-
         [Authorize]
         [HttpGet("export-data")]
         public async Task<IActionResult> ExportUserData()
@@ -1458,6 +1528,15 @@ namespace Berwah.Controllers
             using var rng = RandomNumberGenerator.Create();
             rng.GetBytes(randomNumber);
             return Convert.ToBase64String(randomNumber);
+        }
+
+
+        /// <summary>The phone's own id, sent by the app with every request.</summary>
+        private string? CurrentDeviceId()
+        {
+            var value = Request.Headers["X-Device-Id"].ToString().Trim();
+            if (value.Length == 0) return null;
+            return value.Length > 100 ? value[..100] : value;
         }
         #endregion
     }

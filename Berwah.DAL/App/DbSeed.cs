@@ -69,5 +69,83 @@ namespace Berwah.DAL.App
                 }
             }
         }
+
+        public static async Task SeedSupervisorsAsync(UserManager<User> userManager)
+        {
+            // 1. مشرف الإعلانات
+            var adSupervisorEmail = "ad@berwah.com";
+            if (await userManager.FindByEmailAsync(adSupervisorEmail) == null)
+            {
+                var adSupervisor = new User
+                {
+                    UserName = adSupervisorEmail,
+                    Email = adSupervisorEmail,
+                    EmailConfirmed = true,
+                    FirstName = "مشرف",
+                    SecondName = "الإعلانات",
+                    ThirdName = "الجديده",
+                    LastName = "برواح",
+                    PhoneNumber = "01000000001",
+                    Address = "الرياض",
+                    UserType = Models.Enum.UserType.Staff // أو حسب تصميمك
+                };
+
+                var result = await userManager.CreateAsync(adSupervisor, "Supervisor@1234");
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(adSupervisor, "SupervisorForAd");
+                }
+            }
+
+            // 2. مشرف الخدمات
+            var serviceSupervisorEmail = "service@berwah.com";
+            if (await userManager.FindByEmailAsync(serviceSupervisorEmail) == null)
+            {
+                var serviceSupervisor = new User
+                {
+                    UserName = serviceSupervisorEmail,
+                    Email = serviceSupervisorEmail,
+                    EmailConfirmed = true,
+                    FirstName = "مشرف",
+                    SecondName = "طلبات",
+                    ThirdName = "الخدمات",
+                    LastName = "برواح",
+                    PhoneNumber = "01000000002",
+                    Address = "الرياض",
+                    UserType = Models.Enum.UserType.Staff
+                };
+
+                var result = await userManager.CreateAsync(serviceSupervisor, "Supervisor@1234");
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(serviceSupervisor, "SupervisorForServices"); 
+                }
+            }
+
+            // 3. مشرف المستعمل
+            var usedSupervisorEmail = "useds@berwah.com";
+            if (await userManager.FindByEmailAsync(usedSupervisorEmail) == null)
+            {
+                var usedSupervisor = new User
+                {
+                    UserName = usedSupervisorEmail,
+                    Email = usedSupervisorEmail,
+                    EmailConfirmed = true,
+                    FirstName = "مشرف",
+                    SecondName = "المنتاجات",
+                    ThirdName = "المستعملة",
+                    LastName = "برواح",
+                    PhoneNumber = "01111111111",
+                    Address = "الرياض",
+                    UserType = Models.Enum.UserType.Staff
+                };
+
+                var result = await userManager.CreateAsync(usedSupervisor, "Supervisor@1234");
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(usedSupervisor, "SupervisorUsed");
+                }
+            }
+        }
     }
 }

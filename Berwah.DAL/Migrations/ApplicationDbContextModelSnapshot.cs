@@ -233,6 +233,9 @@ namespace Berwah.DAL.Migrations
                     b.Property<int>("ImageId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsMain")
+                        .HasColumnType("bit");
+
                     b.HasKey("AdvertismentId", "ImageId");
 
                     b.HasIndex("ImageId");
@@ -993,6 +996,15 @@ namespace Berwah.DAL.Migrations
 
                     b.Property<DateTime?>("ProviderDoneAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<double?>("ProviderLatitude")
+                        .HasColumnType("float");
+
+                    b.Property<DateTime?>("ProviderLocationAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<double?>("ProviderLongitude")
+                        .HasColumnType("float");
 
                     b.Property<int?>("ServiceOptionId")
                         .HasColumnType("int");

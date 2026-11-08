@@ -8,6 +8,7 @@ namespace Berwah.Models.Models
 {
     public class AdvertismentImage
     {
+        public bool IsMain { get; set; } = true;
         public int AdvertismentId { get; set; }
         public Advertisment? Advertisment { get; set; }
 

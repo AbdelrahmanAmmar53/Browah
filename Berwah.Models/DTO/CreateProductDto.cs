@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace Berwah.Models.DTO
 {
-    public record CreateProductDto(string Name,string Description,decimal Price,int MenuSectionId,decimal OrignalPrice, bool IsAvailableForInstantOrder , bool IsSpecialOffer, int Stock,string Location,ProductCondition Condition,IFormFile? ImageFile);
+    public record CreateProductDto(string Name,string Description,decimal Price,int MenuSectionId,decimal OrignalPrice, bool IsAvailableForInstantOrder , bool IsSpecialOffer, int Stock,string? Location,ProductCondition Condition,IFormFile? ImageFile);
     //public class CreateProductDto
     //{
     //    [Required]

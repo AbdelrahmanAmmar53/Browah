@@ -94,6 +94,17 @@ namespace Berwah.DAL.Repository
             await _context.SaveChangesAsync();
         }
 
+        public async Task<Dictionary<int, int>> GetReviewCountsAsync(IEnumerable<int> merchantIds)
+        {
+            var ids = merchantIds.Distinct().ToList();
+            return await _context.StoreReviews
+                .AsNoTracking()
+                .Where(r => ids.Contains(r.MerchantId))
+                .GroupBy(r => r.MerchantId)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Key, x => x.Count);
+        }
+
         public async Task<IEnumerable<User>> GetMerchantsByBusinessTypeAsync(string businessType)
         {
             return await _context.Users

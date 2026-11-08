@@ -11,6 +11,8 @@ namespace Berwah.BL.Service.IService
     public interface IMerchantService
     {
         Task<MerchantDashboardResponseDto> GetDashboardDataAsync(int merchantId, string? filter);
+        /// <summary>The store's finished orders (handed to the captain, delivered or cancelled), newest first.</summary>
+        Task<object> GetOrderHistoryAsync(int merchantId, int page, int pageSize);
         Task<bool> UpdateOrderStatusAsync(int orderId, int merchantId, UpdateMerchantOrderStatusDto model);
         Task<bool> ToggleStoreStatusAsync(int merchantId, bool isOpen);
         Task<RejectOrderDetailsDto?> GetRejectOrderDetailsAsync(int orderId, int merchantId);

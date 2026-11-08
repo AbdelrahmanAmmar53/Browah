@@ -36,6 +36,7 @@ builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddHostedService<Berwah.Services.ServiceJobAutoConfirm>();
 builder.Services.AddHostedService<Berwah.Services.CaptainLicenseReminder>();
+builder.Services.AddHostedService<Berwah.Services.NotificationCleanup>();
 builder.Services.AddSingleton<Berwah.Services.FcmSender>();
 builder.Services.AddSingleton<INotificationPusher, Berwah.Services.SignalRNotificationPusher>();
 builder.Services.AddScoped<ISupporterService, SupporterService>();
@@ -49,6 +50,7 @@ builder.Services.AddScoped<IMerchantService, MerchantService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ISupervisorForAdService, SupervisorForAdService>();
 builder.Services.AddScoped<ISupervisorForSRService, SupervisorForSRService>();
+builder.Services.AddScoped<ISupervisorUsedService, SupervisorUsedService>();
 
 
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
@@ -61,6 +63,7 @@ builder.Services.AddScoped<IMerchantRepository, MerchantRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<ISupervisorForAdRepository, SupervisorForAdRepository>();
 builder.Services.AddScoped<ISupervisorForSR, SupervisorForSRRepository>();
+builder.Services.AddScoped<ISupervisorUsedRepository, SupervisorUsedRepository>();
 
 
 builder.Services.AddSignalR();
@@ -174,6 +177,7 @@ using (var scope = app.Services.CreateScope())
 
     await DbSeed.SeedRolesAsync(roleManager);
     await DbSeed.SeedAdminAsync(userManager);
+    await DbSeed.SeedSupervisorsAsync(userManager);
 }
 
 app.UseSwagger();

@@ -291,7 +291,7 @@ namespace Berwah.Controllers
                     {
                         Id = order.Delivery.Id,
                         Name = order.Delivery.UserName ?? "مندوب برواح",
-                        Rating = 4.9,
+                        Rating = order.Delivery.Rating,
                         PhoneNumber = order.Delivery.PhoneNumber ?? "غير متوفر",
                         ImageUrl = order.Delivery.ProfileImageUrl ?? "https://res.cloudinary.com/..."
                     };
@@ -371,7 +371,7 @@ namespace Berwah.Controllers
                         IsCancelled = i.MerchantStatus == OrderStatus.Cancelled
                     }).ToList(),
                     RefundAmount = order.PaymentMethod != PaymentMethod.Cash && cancelledSum > 0 ? (allCancelled ? cancelledSum + 30 : cancelledSum) : 0,
-                    DeliveryManRating = 4.9,
+                    DeliveryManRating = order.Delivery?.Rating ?? 0,
                     TotalAmount = (decimal)order.TotalPrice,
                     PaymentStatus = order.PaymentMethod == PaymentMethod.Cash ? "الدفع نقداً عند الاستلام" : "مدفوع إلكترونياً"
                 };
@@ -495,6 +495,22 @@ namespace Berwah.Controllers
                 var acceptedPrices = await _context.ServiceOffers
                     .Where(f => acceptedIds.Contains(f.Id))
                     .ToDictionaryAsync(f => f.Id, f => f.Price);
+                var acceptedInfo = await _context.ServiceOffers
+                    .Where(f => acceptedIds.Contains(f.Id))
+                    .Select(f => new
+                    {
+                        f.Id,
+                        Name = f.Provider.BusinessName != null && f.Provider.BusinessName != ""
+                            ? f.Provider.BusinessName
+                            : (f.Provider.FirstName + " " + f.Provider.LastName),
+                        Phone = f.Provider.PhoneNumber,
+                        f.ExecutionPeriod
+                    })
+                    .ToDictionaryAsync(x => x.Id);
+                var optionIds = requests.Where(r => r.ServiceOptionId != null).Select(r => r.ServiceOptionId!.Value).Distinct().ToList();
+                var optionNames = await _context.ServiceOptions
+                    .Where(o => optionIds.Contains(o.Id))
+                    .ToDictionaryAsync(o => o.Id, o => o.Name);
 
                 var requestRows = requests.Select(r => new
                 {
@@ -515,7 +531,18 @@ namespace Berwah.Controllers
                     items = new List<string> { r.Description },
                     address = r.DeliveryAddress ?? r.PickupAddress ?? string.Empty,
                     createdAt = r.CreatedAt,
-                    offersCount = offerCounts.TryGetValue(r.Id, out var c) ? c : 0
+                    offersCount = offerCounts.TryGetValue(r.Id, out var c) ? c : 0,
+                    description = r.Description,
+                    pickupAddress = r.PickupAddress ?? string.Empty,
+                    deliveryAddress = r.DeliveryAddress ?? string.Empty,
+                    preferredDate = r.PreferredDate,
+                    preferredTime = r.PreferredTimeSlot ?? string.Empty,
+                    estimatedPrice = r.EstimatedPrice > 0 ? (decimal?)r.EstimatedPrice : null,
+                    optionName = r.ServiceOptionId != null && optionNames.TryGetValue(r.ServiceOptionId.Value, out var on) ? on : string.Empty,
+                    providerName = r.AcceptedOfferId != null && acceptedInfo.TryGetValue(r.AcceptedOfferId.Value, out var pi) ? pi.Name : string.Empty,
+                    providerPhone = r.AcceptedOfferId != null && acceptedInfo.TryGetValue(r.AcceptedOfferId.Value, out var pp) ? pp.Phone : string.Empty,
+                    executionPeriod = r.AcceptedOfferId != null && acceptedInfo.TryGetValue(r.AcceptedOfferId.Value, out var pe) ? pe.ExecutionPeriod : string.Empty,
+                    attachmentUrl = r.AttachmentUrl ?? string.Empty
                 }).ToList();
 
                 var all = orderRows.Select(x => (x.createdAt, (object)x))

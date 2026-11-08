@@ -353,12 +353,18 @@ namespace Berwah.Controllers
                     .FirstOrDefaultAsync(r => r.Id == requestId && r.UserId == CurrentUserId);
                 if (request == null)
                     return NotFound(new { status = "error", message = "الخدمة غير موجودة" });
-                if (request.Status != ServiceRequestStatus.Pending || request.AcceptedOfferId != null)
-                    return BadRequest(new { status = "error", message = "لا يمكن إلغاء الخدمة بعد اختيار مقدم خدمة" });
+                // Cancelling works in every state (offers made, provider chosen, job running); only a
+                // job the customer already confirmed as done is kept.
+                if (request.Status == ServiceRequestStatus.Completed)
+                    return BadRequest(new { status = "error", message = "الخدمة اتنفذت وتم تأكيدها، لا يمكن إلغاؤها" });
 
                 var offers = await _context.ServiceOffers.Where(o => o.ServiceRequestId == requestId).ToListAsync();
-                if (offers.Any(o => !o.Withdrawn))
-                    return BadRequest(new { status = "error", message = "فيه عروض مقدمة على الخدمة، لا يمكن إلغاؤها الآن" });
+                var providersToTell = offers.Where(o => !o.Withdrawn).Select(o => o.ProviderId).Distinct().ToList();
+                if (request.AcceptedOfferId != null)
+                {
+                    request.AcceptedOfferId = null;
+                    await _context.SaveChangesAsync();
+                }
 
                 // Chats about this request (Kind 1) go with it.
                 var chats = await _context.Conversations.Where(c => c.Kind == 1 && c.RefId == requestId).ToListAsync();
@@ -372,11 +378,125 @@ namespace Berwah.Controllers
                 _context.ServiceRequests.Remove(request);
                 await _context.SaveChangesAsync();
 
+                foreach (var providerId in providersToTell)
+                {
+                    try
+                    {
+                        await _notificationService.SendNotificationAsync(new SendNotification
+                        {
+                            UserId = providerId,
+                            Title = "تم إلغاء الطلب",
+                            Message = $"ألغى العميل طلب الخدمة #{requestId}."
+                        });
+                    }
+                    catch { /* best effort */ }
+                }
+
                 return Ok(new { status = "success", message = "تم إلغاء الخدمة وحذفها" });
             }
             catch (Exception)
             {
                 return StatusCode(500, new { status = "error", message = "حدث خطأ غير متوقع، حاول مرة أخرى" });
+            }
+        }
+
+        public class TripLocationDto
+        {
+            public double Latitude { get; set; }
+            public double Longitude { get; set; }
+        }
+
+        /// <summary>The chosen provider's app reports where he is while the job runs.</summary>
+        [HttpPost("{requestId}/location")]
+        public async Task<IActionResult> UpdateProviderLocation(int requestId, [FromBody] TripLocationDto dto)
+        {
+            try
+            {
+                var (request, providerId) = await LoadJobAsync(requestId);
+                if (request == null || providerId != CurrentUserId)
+                    return NotFound(new { status = "error", message = "المهمة غير موجودة" });
+                if (request.Status != ServiceRequestStatus.Approved && request.Status != ServiceRequestStatus.InProgress)
+                    return BadRequest(new { status = "error", message = "المهمة غير نشطة" });
+                if (dto.Latitude < -90 || dto.Latitude > 90 || dto.Longitude < -180 || dto.Longitude > 180)
+                    return BadRequest(new { status = "error", message = "إحداثيات غير صحيحة" });
+
+                request.ProviderLatitude = dto.Latitude;
+                request.ProviderLongitude = dto.Longitude;
+                request.ProviderLocationAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                return Ok(new { status = "success" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// The trip as the customer (or the provider) follows it: the two ends, the stage, and where the
+        /// provider is. The app asks again every few seconds.
+        /// </summary>
+        [HttpGet("{requestId}/track")]
+        public async Task<IActionResult> Track(int requestId)
+        {
+            try
+            {
+                var me = CurrentUserId;
+                var r = await _context.ServiceRequests.AsNoTracking()
+                    .Include(x => x.SubCategory)
+                    .FirstOrDefaultAsync(x => x.Id == requestId);
+                if (r == null) return NotFound(new { status = "error", message = "الطلب غير موجود" });
+
+                var offer = r.AcceptedOfferId == null
+                    ? null
+                    : await _context.ServiceOffers.AsNoTracking().Include(o => o.Provider)
+                        .FirstOrDefaultAsync(o => o.Id == r.AcceptedOfferId);
+                if (r.UserId != me && offer?.ProviderId != me)
+                    return NotFound(new { status = "error", message = "الطلب غير موجود" });
+
+                // waiting -> toPickup (provider chosen, on his way) -> onTrip (started) -> arrived (provider says done) -> completed.
+                string stage = r.Status switch
+                {
+                    ServiceRequestStatus.Completed => "completed",
+                    ServiceRequestStatus.Cancelled => "cancelled",
+                    ServiceRequestStatus.InProgress => r.ProviderDoneAt != null ? "arrived" : "onTrip",
+                    ServiceRequestStatus.Approved => "toPickup",
+                    _ => "waiting"
+                };
+                bool live = stage == "toPickup" || stage == "onTrip" || stage == "arrived";
+                var p = offer?.Provider;
+
+                return Ok(new
+                {
+                    status = "success",
+                    data = new
+                    {
+                        id = r.Id,
+                        stage,
+                        title = r.SubCategory.Name,
+                        isProvider = offer?.ProviderId == me,
+                        price = offer?.Price,
+                        pickup = new { address = r.PickupAddress, lat = r.PickupLatitude, lng = r.PickupLongitude },
+                        destination = new { address = r.DeliveryAddress, lat = r.DeliveryLatitude, lng = r.DeliveryLongitude },
+                        provider = p == null ? null : new
+                        {
+                            id = p.Id,
+                            name = (p.FirstName + " " + p.LastName).Trim(),
+                            image = p.ProfileImageUrl,
+                            rating = p.Rating,
+                            phone = p.HidePhoneNumber ? null : p.PhoneNumber,
+                            lat = live ? r.ProviderLatitude : null,
+                            lng = live ? r.ProviderLongitude : null,
+                            ageSeconds = live && r.ProviderLocationAt != null
+                                ? (double?)(DateTime.UtcNow - r.ProviderLocationAt.Value).TotalSeconds
+                                : null
+                        }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { status = "error", message = ex.Message });
             }
         }
 

@@ -175,8 +175,11 @@ namespace Berwah.Controllers
                     .Select(g => new { Id = g.Key, N = g.Count() })
                     .ToDictionaryAsync(x => x.Id, x => x.N);
 
+                var closedBy = await ClosedStateAsync(convs);
+
                 var data = convs.Select(c =>
                 {
+                    closedBy.TryGetValue(c.Id, out var closedState);
                     var otherId = c.UserAId == me ? c.UserBId : c.UserAId;
                     users.TryGetValue(otherId, out var other);
                     lastBy.TryGetValue(c.Id, out var last);
@@ -190,7 +193,9 @@ namespace Berwah.Controllers
                         otherImage = other?.ProfileImageUrl,
                         lastMessage = last == null ? string.Empty : (string.IsNullOrEmpty(last.Text) && last.ImageUrl != null ? "📷 صورة" : last.Text),
                         lastMessageAt = last?.CreatedAt ?? c.CreatedAt,
-                        unread = unread.TryGetValue(c.Id, out var n) ? n : 0
+                        unread = unread.TryGetValue(c.Id, out var n) ? n : 0,
+                        closed = closedState.Closed,
+                        closedAt = closedState.At
                     };
                 }).ToList();
 
@@ -330,13 +335,56 @@ namespace Berwah.Controllers
                 }
 
                 var c = await EnsureAsync(dto.Kind, dto.RefId, me, peer);
-                return Ok(new { status = "success", data = new { id = c.Id } });
+                return Ok(new { status = "success", data = new { id = c.Id, closed = await IsClosedAsync(c) } });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { status = "error", message = "حدث خطأ غير متوقع، حاول مرة أخرى" });
             }
         }
+
+        /// <summary>
+        /// Which of these chats are over: the service was completed or cancelled, or the order was
+        /// delivered or cancelled. Worked out from the thing itself, so nothing is stored.
+        /// </summary>
+        private async Task<Dictionary<int, (bool Closed, DateTime? At)>> ClosedStateAsync(IEnumerable<Conversation> convs)
+        {
+            var result = new Dictionary<int, (bool, DateTime?)>();
+            var list = convs.ToList();
+
+            var serviceIds = list.Where(c => c.Kind == KindService).Select(c => c.RefId).Distinct().ToList();
+            var services = serviceIds.Count == 0
+                ? new Dictionary<int, (ServiceRequestStatus Status, DateTime? At)>()
+                : (await _db.ServiceRequests.AsNoTracking().Where(r => serviceIds.Contains(r.Id))
+                    .Select(r => new { r.Id, r.Status, r.CompletedAt }).ToListAsync())
+                    .ToDictionary(r => r.Id, r => (r.Status, r.CompletedAt));
+
+            var orderIds = list.Where(c => c.Kind != KindService).Select(c => c.RefId).Distinct().ToList();
+            var orders = orderIds.Count == 0
+                ? new Dictionary<int, (OrderStatus Status, DateTime? At)>()
+                : (await _db.Orders.AsNoTracking().Where(o => orderIds.Contains(o.Id))
+                    .Select(o => new { o.Id, o.Status, o.DeliveredAt }).ToListAsync())
+                    .ToDictionary(o => o.Id, o => (o.Status, o.DeliveredAt));
+
+            foreach (var c in list)
+            {
+                if (c.Kind == KindService)
+                {
+                    if (!services.TryGetValue(c.RefId, out var s)) { result[c.Id] = (true, null); continue; }
+                    result[c.Id] = (s.Status == ServiceRequestStatus.Completed || s.Status == ServiceRequestStatus.Cancelled, s.Item2);
+                }
+                else
+                {
+                    if (!orders.TryGetValue(c.RefId, out var o)) { result[c.Id] = (true, null); continue; }
+                    result[c.Id] = (o.Status == OrderStatus.Delivered || o.Status == OrderStatus.Cancelled, o.Item2);
+                }
+            }
+            return result;
+        }
+
+        private const string ClosedMessage = "انتهت العملية، المحادثة مقفولة";
+
+        private async Task<bool> IsClosedAsync(Conversation c) => (await ClosedStateAsync(new[] { c }))[c.Id].Closed;
 
         private async Task<Conversation?> MineAsync(int id)
         {
@@ -366,7 +414,7 @@ namespace Berwah.Controllers
                 await _db.SaveChangesAsync();
             }
 
-            return Ok(new { status = "success", data = list });
+            return Ok(new { status = "success", data = list, closed = await IsClosedAsync(c) });
         }
 
         public class SendChatDto
@@ -381,6 +429,7 @@ namespace Berwah.Controllers
             {
                 var c = await MineAsync(id);
                 if (c == null) return NotFound(new { status = "error", message = "المحادثة غير موجودة" });
+                if (await IsClosedAsync(c)) return BadRequest(new { status = "error", message = ClosedMessage, closed = true });
 
                 var text = dto.Text?.Trim();
                 if (string.IsNullOrEmpty(text)) return BadRequest(new { status = "error", message = "الرسالة فارغة" });
@@ -430,6 +479,7 @@ namespace Berwah.Controllers
             {
                 var c = await MineAsync(id);
                 if (c == null) return NotFound(new { status = "error", message = "المحادثة غير موجودة" });
+                if (await IsClosedAsync(c)) return BadRequest(new { status = "error", message = ClosedMessage, closed = true });
 
                 var file = dto.Image;
                 if (file == null || file.Length == 0) return BadRequest(new { status = "error", message = "الصورة مطلوبة" });

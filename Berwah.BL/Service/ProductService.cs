@@ -101,7 +101,7 @@ namespace Berwah.BL.Service
                 MenuSectionId = model.MenuSectionId,
                 UserId = merchantId,
 
-                Location = model.Location,
+                Location = model.Location ?? string.Empty,
                 Condition = model.Condition,
 
                 CreatedAt = DateTime.UtcNow,

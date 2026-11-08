@@ -749,6 +749,21 @@ namespace Berwah.Controllers
             }
         }
 
+        // Orders the captain already took (and delivered / cancelled ones): the store's order record.
+        [Authorize(Roles = "Merchant")]
+        [HttpGet("Orders/History")]
+        public async Task<IActionResult> GetOrdersHistory([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                return Ok(await _merchantService.GetOrderHistoryAsync(Me, page, pageSize));
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = "error", message = "حدث خطأ غير متوقع، حاول مرة أخرى" });
+            }
+        }
+
         public class ReplyDto
         {
             public string? Reply { get; set; }

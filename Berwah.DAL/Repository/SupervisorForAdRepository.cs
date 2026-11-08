@@ -24,7 +24,7 @@ namespace Berwah.DAL.Repository
         {
             return await _context.Advertisements
                 .AsNoTracking()
-                .Where(a => a.Status == status)
+                .Where(a => a.Status == status && a.Condition == ProductCondition.New)
                 .Include(a => a.User)
                 .Include(a => a.AdvertismentImages)
                     .ThenInclude(ai => ai.Image)

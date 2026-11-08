@@ -31,10 +31,12 @@ namespace Berwah.BL.Service
 
             // An order can hold items of several stores: each store sees its own part and
             // its own progress (StatusFor), not the other stores'.
-            int totalActive = allOrders.Count(o => StatusFor(o, merchantId) != OrderStatus.Delivered
-                                                   && StatusFor(o, merchantId) != OrderStatus.Cancelled);
-            int cookingCount = allOrders.Count(o => StatusFor(o, merchantId) == OrderStatus.Processing);
-            int readyCount = allOrders.Count(o =>
+            // Once the captain has taken the store's part (or the order ended) it leaves the board
+            // and lives in the order history instead.
+            var active = allOrders.Where(o => !IsFinished(o, merchantId)).ToList();
+            int totalActive = active.Count;
+            int cookingCount = active.Count(o => StatusFor(o, merchantId) == OrderStatus.Processing);
+            int readyCount = active.Count(o =>
             {
                 var st = StatusFor(o, merchantId);
                 return st == OrderStatus.Shipped || (o.DeliveryId != null && st == OrderStatus.Processing);
@@ -46,10 +48,10 @@ namespace Berwah.BL.Service
 
             var filteredOrders = filter?.ToLower() switch
             {
-                "new" => allOrders.Where(o => StatusFor(o, merchantId) == OrderStatus.Pending).ToList(),
-                "cooking" => allOrders.Where(o => StatusFor(o, merchantId) == OrderStatus.Processing).ToList(),
-                "ready" => allOrders.Where(o => o.DeliveryId != null).ToList(),
-                _ => allOrders
+                "new" => active.Where(o => StatusFor(o, merchantId) == OrderStatus.Pending).ToList(),
+                "cooking" => active.Where(o => StatusFor(o, merchantId) == OrderStatus.Processing).ToList(),
+                "ready" => active.Where(o => o.DeliveryId != null).ToList(),
+                _ => active
             };
 
             var orderDtos = filteredOrders.Select(o => new MerchantOrderDto
@@ -83,6 +85,62 @@ namespace Berwah.BL.Service
                 TodaySales = todaySales,
                 Orders = orderDtos
             };
+        }
+
+        // ---- Order history ----
+
+        /// <summary>The captain has collected everything this store had in the order.</summary>
+        private static bool IsHandedOver(Order o, int merchantId)
+        {
+            if (o.Status == OrderStatus.OutForDelivery) return true;
+            var live = OwnItems(o, merchantId).Where(i => i.MerchantStatus != OrderStatus.Cancelled).ToList();
+            return live.Count > 0 && live.All(i => i.PickedUpAt != null);
+        }
+
+        /// <summary>Nothing left for the store to do: handed over, delivered or cancelled.</summary>
+        private static bool IsFinished(Order o, int merchantId)
+        {
+            var st = StatusFor(o, merchantId);
+            return st == OrderStatus.Delivered || st == OrderStatus.Cancelled || IsHandedOver(o, merchantId);
+        }
+
+        public async Task<object> GetOrderHistoryAsync(int merchantId, int page, int pageSize)
+        {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 5, 50);
+            var all = await _merchantRepository.GetMerchantOrdersAsync(merchantId);
+            var done = all.Where(o => IsFinished(o, merchantId)).ToList();
+
+            var data = done.Skip((page - 1) * pageSize).Take(pageSize).Select(o =>
+            {
+                var st = StatusFor(o, merchantId);
+                var own = OwnItems(o, merchantId);
+                var pickedAt = own.Where(i => i.PickedUpAt != null).Select(i => i.PickedUpAt).Max();
+                string code = st == OrderStatus.Delivered ? "Delivered" : st == OrderStatus.Cancelled ? "Cancelled" : "HandedOver";
+                string text = code switch
+                {
+                    "Delivered" => "تم التوصيل للعميل",
+                    "Cancelled" => "ملغي",
+                    _ => "تم التسليم للمندوب"
+                };
+                var at = code == "Delivered" ? (o.DeliveredAt ?? pickedAt ?? o.CreatedAt) : (pickedAt ?? o.CreatedAt);
+                return new
+                {
+                    orderId = o.Id,
+                    orderNumber = $"#ORD-{o.Id}",
+                    customer = $"{o.User?.FirstName} {o.User?.LastName}".Trim(),
+                    total = TotalFor(o, merchantId),
+                    status = code,
+                    statusText = text,
+                    captain = o.Delivery == null ? null : $"{o.Delivery.FirstName} {o.Delivery.LastName}".Trim(),
+                    payment = o.PaymentMethod == PaymentMethod.Cash ? "نقداً (كاش)" : "دفع إلكتروني",
+                    items = string.Join("، ", own.Where(i => i.MerchantStatus != OrderStatus.Cancelled)
+                        .Select(i => $"{i.Product?.Name ?? "منتج"} ×{i.Quantity}")),
+                    dateText = at.ToString("dd/MM/yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture)
+                };
+            }).ToList();
+
+            return new { status = "success", data, hasMore = done.Count > page * pageSize, total = done.Count };
         }
 
         // ---- Orders that hold items of several stores ----
@@ -443,7 +501,10 @@ namespace Berwah.BL.Service
 
             var merchants = await _merchantRepository.GetMerchantsByBusinessTypeAsync(businessType);
 
-            return merchants.Select(m => new MerchantCardDto
+            var merchantList = merchants.ToList();
+            var reviewCounts = await _merchantRepository.GetReviewCountsAsync(merchantList.Select(m => m.Id));
+
+            return merchantList.Select(m => new MerchantCardDto
             {
                 MerchantId = m.Id,
                 BusinessName = m.BusinessName ?? $"{m.FirstName} {m.LastName}",
@@ -454,7 +515,7 @@ namespace Berwah.BL.Service
                 IsOpen = !m.IsFrozen && !m.IsPaused,
                 WorkHours = m.WorkHours ?? "11:00 - 23:00",
                 Rating = m.Rating > 0 ? (decimal)m.Rating : 0m,
-                ReviewsCount = 0
+                ReviewsCount = reviewCounts.TryGetValue(m.Id, out var reviewCount) ? reviewCount : 0
             }).ToList();
         }
     }

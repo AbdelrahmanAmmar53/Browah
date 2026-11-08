@@ -45,6 +45,11 @@ namespace Berwah.Models.Models
         public int? CustomerRating { get; set; }
         public string? CustomerReview { get; set; }
 
+        /// <summary>Where the chosen provider is right now (sent by his app while the job runs), so the customer can follow the trip.</summary>
+        public double? ProviderLatitude { get; set; }
+        public double? ProviderLongitude { get; set; }
+        public DateTime? ProviderLocationAt { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

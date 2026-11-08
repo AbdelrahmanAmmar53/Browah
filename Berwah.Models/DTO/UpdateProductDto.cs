@@ -20,7 +20,8 @@ namespace Berwah.Models.DTO
         public bool IsSpecialOffer { get; set; }
 
         public int Stock { get; set; }
-        public string Location { get; set; } = string.Empty;
+        // Optional: items have no location of their own (the store's pin is used).
+        public string? Location { get; set; }
  
         public ProductCondition Condition { get; set; } = ProductCondition.NotApplicable;
         public int MenuSectionId { get; set; }

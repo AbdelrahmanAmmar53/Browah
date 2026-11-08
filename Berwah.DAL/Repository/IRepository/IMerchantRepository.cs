@@ -19,6 +19,8 @@ namespace Berwah.DAL.Repository.IRepository
         Task RecordTransactionAsync(int userId, decimal amount, string type, string description);
         Task<int> GetActiveProductsCountAsync(int merchantId);
         Task<IEnumerable<User>> GetMerchantsByBusinessTypeAsync(string businessType);
+        /// <summary>How many customer reviews each of these stores has.</summary>
+        Task<Dictionary<int, int>> GetReviewCountsAsync(IEnumerable<int> merchantIds);
         /// <summary>Merchants whose BusinessType is one of <paramref name="types"/> (trimmed, case-insensitive).</summary>
         Task<IEnumerable<User>> GetMerchantsByBusinessTypesAsync(string[] types);
         /// <summary>Every merchant whose activity is NOT one of the excluded ones (stores registered as "other" count as restaurants).</summary>

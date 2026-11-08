@@ -439,6 +439,21 @@ namespace Berwah.Controllers
             if (allPickedUp) order.Status = OrderStatus.OutForDelivery;
             await _context.SaveChangesAsync();
 
+            // The store's part is with the captain now: it leaves the store's board for its order record.
+            foreach (var storeId in toPick.Where(i => i.Product != null).Select(i => i.Product.UserId).Distinct())
+            {
+                try
+                {
+                    await _notifications.SendNotificationAsync(new SendNotification
+                    {
+                        UserId = storeId,
+                        Title = "المندوب استلم الطلب 🛵",
+                        Message = $"تم تسليم الطلب #{orderId} للمندوب، وانتقل إلى سجل الطلبات."
+                    });
+                }
+                catch { /* best effort */ }
+            }
+
             if (allPickedUp)
             {
                 // إشعار العميل فوراً بتحديث الشاشة إلى مرحلة "في الطريق إليك"

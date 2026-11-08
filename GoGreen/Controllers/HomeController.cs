@@ -157,6 +157,16 @@ namespace Berwah.Controllers
         {
             if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var me) || requests.Count == 0) return;
             var ids = requests.Select(r => r.Id).ToList();
+
+            // My own requests are not opportunities for me: leave them out of the list.
+            var ownIds = (await _db.ServiceRequests.AsNoTracking()
+                .Where(r => r.UserId == me && ids.Contains(r.Id))
+                .Select(r => r.Id).ToListAsync()).ToHashSet();
+            for (var i = requests.Count - 1; i >= 0; i--)
+                if (ownIds.Contains(requests[i].Id)) requests.RemoveAt(i);
+            if (requests.Count == 0) return;
+            ids = requests.Select(r => r.Id).ToList();
+
             var mine = await _db.ServiceOffers.AsNoTracking()
                 .Where(o => o.ProviderId == me && ids.Contains(o.ServiceRequestId))
                 .Select(o => o.ServiceRequestId).Distinct().ToListAsync();
