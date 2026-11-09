@@ -3,6 +3,7 @@ using Berwah.Models.DTO.SupervisorUsed;
 using Berwah.Models.Enum;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Berwah.Controllers
 {
@@ -76,6 +77,86 @@ namespace Berwah.Controllers
             var result = await _service.RejectAdWithPenaltyAsync(id, dto);
             if (!result) return BadRequest(new { message = "فشل رفض الإعلان" });
             return Ok(new { status = "success", message = "تم رفض الإعلان وتسجيل المخالفة على المعلم" });
+        }
+
+        // --- 📦 طلبات وصلني (Wosally Orders) ---
+        [HttpGet("wosally-orders")]
+        public async Task<IActionResult> GetWosallyOrders([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        {
+            var orders = await _service.GetWosallyOrdersAsync(status, page, pageSize);
+            return Ok(new { status = "success", data = orders });
+        }
+
+        [HttpGet("wosally-orders/{id}")]
+        public async Task<IActionResult> GetWosallyOrderDetails(int id)
+        {
+            var details = await _service.GetWosallyOrderDetailsAsync(id);
+            if (details == null) return NotFound(new { message = "الطلب غير موجود" });
+            return Ok(new { status = "success", data = details });
+        }
+
+        [HttpPost("wosally-orders/{id}/approve-and-reveal")]
+        public async Task<IActionResult> ApproveAndRevealData(int id, [FromBody] WosallyActionDto dto)
+        {
+            var result = await _service.ApproveAndRevealBuyerDataAsync(id, dto);
+            if (!result) return BadRequest(new { message = "فشل تنفيذ العملية" });
+            return Ok(new { status = "success", message = "تمت الموافقة وإظهار البيانات بنجاح" });
+        }
+
+        [HttpPost("wosally-orders/{id}/send-joint-alert")]
+        public async Task<IActionResult> SendJointAlert(int id)
+        {
+            var result = await _service.SendJointAlertAsync(id);
+            if (!result) return BadRequest(new { message = "فشل إرسال التنبيه" });
+            return Ok(new { status = "success", message = "تم إرسال التنبيه المشترك للطرفين" });
+        }
+
+        // --- 🚨 إدارة الشكاوي والبلاغات (Complaints & Disputes) ---
+        [HttpGet("complaints")]
+        public async Task<IActionResult> GetComplaints([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        {
+            var complaints = await _service.GetComplaintsAsync(status, page, pageSize);
+            return Ok(new { status = "success", data = complaints });
+        }
+
+        [HttpPost("complaints/{id}/follow-up")]
+        public async Task<IActionResult> FollowUpComplaint(int id, [FromBody] ComplaintActionForUsedDto dto)
+        {
+            var result = await _service.FollowUpComplaintAsync(id, dto);
+            if (!result) return BadRequest(new { message = "فشل تحديث الشكوى" });
+            return Ok(new { status = "success", message = "تم بدء المتابعة والتحقق الميداني بنجاح" });
+        }
+
+        [HttpPost("complaints/{id}/escalate")]
+        public async Task<IActionResult> EscalateComplaint(int id, [FromBody] ComplaintActionForUsedDto dto)
+        {
+            var result = await _service.EscalateToBossAsync(id, dto);
+            if (!result) return BadRequest(new { message = "فشل التصعيد" });
+            return Ok(new { status = "success", message = "تم تصعيد الشكوى للرئيس بنجاح" });
+        }
+
+        [HttpGet("complaints/{id}/details")]
+        public async Task<IActionResult> GetComplaintDetails(int id)
+        {
+            var details = await _service.GetDetailedComplaintAsync(id);
+            if (details == null) return NotFound(new { status = "error", message = "الشكوى غير موجودة" });
+            return Ok(new { status = "success", data = details });
+        }
+
+        [HttpPost("complaints/{id}/send-to-seller")]
+        public async Task<IActionResult> SendToSeller(int id, [FromBody] ComplaintActionForUsedDto dto)
+        {
+            var result = await _service.SendComplaintToSellerAsync(id, dto);
+            if (!result) return BadRequest(new { status = "error", message = "فشل إرسال الشكوى للبائع" });
+            return Ok(new { status = "success", message = "تم إرسال الشكوى للبائع بنجاح" });
+        }
+
+        [HttpGet("wallet")]
+        public async Task<IActionResult> GetWallet()
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var wallet = await _service.GetWalletDataAsync(userId);
+            return Ok(new { status = "success", data = wallet });
         }
     }
 }

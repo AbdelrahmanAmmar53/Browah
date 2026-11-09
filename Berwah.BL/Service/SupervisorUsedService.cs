@@ -1,6 +1,7 @@
 ﻿using Berwah.BL.Service.IService;
 using Berwah.DAL.Repository.IRepository;
 using Berwah.Models.DTO;
+using Berwah.Models.DTO.Delivery;
 using Berwah.Models.DTO.SupervisorUsed;
 using Berwah.Models.Enum;
 using System;
@@ -155,6 +156,164 @@ namespace Berwah.BL.Service
             }
 
             return updated;
+        }
+
+        public async Task<IEnumerable<object>> GetWosallyOrdersAsync(string? status, int page, int pageSize)
+        {
+            var orders = await _repo.GetWosallyOrdersAsync(status, page, pageSize);
+            return orders.Select(o => new
+            {
+                o.Id,
+                Status = o.Status.ToString(),
+                o.CreatedAt,
+                BuyerName = o.User != null ? $"{o.User.FirstName} {o.User.LastName}".Trim() : "مشتري مجهول"
+            });
+        }
+
+        public async Task<object?> GetWosallyOrderDetailsAsync(int id)
+        {
+            var order = await _repo.GetWosallyOrderByIdAsync(id);
+            if (order == null) return null;
+
+            return new
+            {
+                order.Id,
+                Status = order.Status.ToString(),
+                EscrowStatus = "محتجز لدى وصلني", // ضمان أمين مبلغ آمن
+                Buyer = order.User != null ? new { order.User.Id, FullName = $"{order.User.FirstName} {order.User.LastName}", order.User.PhoneNumber } : null
+            };
+        }
+
+        public async Task<bool> ApproveAndRevealBuyerDataAsync(int id, WosallyActionDto dto)
+        {
+            var order = await _repo.GetWosallyOrderByIdAsync(id);
+            if (order == null) return false;
+
+            return true;
+        }
+
+        public async Task<bool> SendJointAlertAsync(int id)
+        {
+            var order = await _repo.GetWosallyOrderByIdAsync(id);
+            if (order == null) return false;
+
+            return true;
+        }
+
+        public async Task<IEnumerable<object>> GetComplaintsAsync(string? status, int page, int pageSize)
+        {
+            var tickets = await _repo.GetComplaintsAsync(status, page, pageSize);
+            return tickets.Select(t => new
+            {
+                t.Id,
+                t.Title,
+                t.Description,
+                t.CreatedAt,
+                Status = t.Status.ToString()
+            });
+        }
+
+        public async Task<bool> FollowUpComplaintAsync(int id, ComplaintActionForUsedDto dto)
+        {
+            var ticket = await _repo.GetComplaintByIdAsync(id);
+            if (ticket == null) return false;
+
+            // تحديث حالة الشكوى لمتابعة ميدانية
+            return await _repo.UpdateTicketAsync(ticket);
+        }
+
+      
+
+        public async Task<ComplaintDetailsResponseDto?> GetDetailedComplaintAsync(int id)
+        {
+            var ticket = await _repo.GetDetailedComplaintAsync(id);
+            if (ticket == null) return null;
+
+            return new ComplaintDetailsResponseDto
+            {
+                Id = ticket.Id,
+                TicketNumber = $"CMP-{ticket.Id}",
+                Title = ticket.Title,
+                Description = ticket.Description,
+                Status = ticket.Status.ToString(),
+                CreatedAt = ticket.CreatedAt,
+                Item = ticket.Advertisement != null ? new ItemDetailsDto
+                {
+                    Id = ticket.Advertisement.Id,
+                    Title = ticket.Advertisement.Title,
+                    Price = ticket.Advertisement.Price,
+                    ImageUrl = ticket.Advertisement.AdvertismentImages?.FirstOrDefault()?.Image?.Url ?? "",
+                    Condition = ticket.Advertisement.Condition.ToString()
+                } : null,
+                Buyer = ticket.User != null ? new PartyDto
+                {
+                    Id = ticket.User.Id,
+                    FullName = $"{ticket.User.FirstName} {ticket.User.LastName}".Trim(),
+                    PhoneNumber = ticket.User.PhoneNumber ?? "",
+                    IsVerified = ticket.User.IsVerified
+                } : null,
+                Seller = ticket.Advertisement?.User != null ? new PartyDto
+                {
+                    Id = ticket.Advertisement.User.Id,
+                    FullName = $"{ticket.Advertisement.User.FirstName} {ticket.Advertisement.User.LastName}".Trim(),
+                    PhoneNumber = ticket.Advertisement.User.PhoneNumber ?? "",
+                    IsVerified = ticket.Advertisement.User.IsVerified
+                } : null,
+                InspectionChecklist = new List<string>
+        {
+            "فحص صور السلعة المعتمَدة قبل الشحن",
+            "الاستماع لإعادة المشتري والتدقيق",
+            "مراجعة بوليصة الاستلام ومحضر التسليم"
+        }
+            };
+        }
+
+        public async Task<bool> SendComplaintToSellerAsync(int id, ComplaintActionForUsedDto dto)
+        {
+            var ticket = await _repo.GetDetailedComplaintAsync(id);
+            if (ticket == null) return false;
+
+            ticket.Status = TicketStatus.InProgress;
+            var updated = await _repo.UpdateTicketAsync(ticket);
+
+            if (updated && ticket.Advertisement?.UserId > 0)
+            {
+                await _notifications.SendNotificationAsync(new SendNotification
+                {
+                    UserId = ticket.Advertisement.UserId,
+                    Title = "شكوى جديدة بخصوص إعلانك ⚠️",
+                    Message = $"يرجى الرد على الشكوى #{ticket.Id}. السبب: {dto.Reason ?? "مراجعة النزاع"}"
+                });
+            }
+            return updated;
+        }
+
+        public async Task<bool> EscalateToBossAsync(int id, ComplaintActionForUsedDto dto)
+        {
+            var ticket = await _repo.GetDetailedComplaintAsync(id);
+            if (ticket == null) return false;
+
+            ticket.Status = TicketStatus.Closed; // أو تحويله لحالة مصعّدة
+            return await _repo.UpdateTicketAsync(ticket);
+        }
+
+        public async Task<SupervisorWalletDto> GetWalletDataAsync(int supervisorId)
+        {
+            var txs = await _repo.GetWalletTransactionsAsync(supervisorId);
+            return new SupervisorWalletDto
+            {
+                CurrentBalance = 8450.0m,
+                PendingAmount = 4050.0m,
+                TotalEarnings = 14850.0m,
+                RecentTransactions = txs.Select(t => new TransactionSupervisorDto
+                {
+                    Id = t.Id,
+                    Title = t.Description ?? "معاملة مالية",
+                    Amount = t.Amount,
+                    Date = t.CreatedAt.ToString("yyyy-MM-dd HH:mm"),
+                    Type = t.Amount > 0 ? "In" : "Out"
+                }).ToList()
+            };
         }
     }
 }

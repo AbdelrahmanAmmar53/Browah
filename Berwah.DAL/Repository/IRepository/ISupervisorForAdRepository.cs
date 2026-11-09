@@ -23,5 +23,7 @@ namespace Berwah.DAL.Repository.IRepository
         Task<IEnumerable<Transaction>> GetSupervisorTransactionsAsync(int supervisorId);
         Task AddTransactionAsync(Transaction transaction);
         Task<double> GetAverageResponseSpeedMinutesAsync(int supervisorId);
+        Task<IEnumerable<Ticket>> GetComplaintsAsync(string status, int page, int pageSize);
+        Task<Ticket?> GetTicketByIdAsync(int id);
     }
 }

@@ -141,5 +141,36 @@ namespace Berwah.DAL.Repository
 
             return Math.Round(totalMinutes > 0 ? totalMinutes : 15.5, 1); // قيمة تقريبية آمنة إذا كانت الفترات قصيرة جداً
         }
+
+        // 🟢 جلب الشكاوى والبلاغات الخاصة بالإعلانات الجديدة
+        public async Task<IEnumerable<Ticket>> GetComplaintsAsync(string status, int page, int pageSize)
+        {
+            var query = _context.Tickets
+                .AsNoTracking()
+                .Include(t => t.User)
+                .Where(t => t.For == TicketFor.ForAdNew) // 🟢 فلترة الشكاوى الخاصة بالإعلانات الجديدة
+                .AsQueryable();
+
+            if (!string.IsNullOrEmpty(status))
+            {
+                if (status.ToLower() == "in_review" || status.ToLower() == "inreview")
+                    query = query.Where(t => t.Status == TicketStatus.InProgress);
+                else if (status.ToLower() == "resolved" || status.ToLower() == "closed")
+                    query = query.Where(t => t.Status == TicketStatus.Closed);
+            }
+
+            return await query
+                .OrderByDescending(t => t.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+        }
+
+        public async Task<Ticket?> GetTicketByIdAsync(int id)
+        {
+            return await _context.Tickets
+                .Include(t => t.User)
+                .FirstOrDefaultAsync(t => t.Id == id && t.For == TicketFor.ForAdNew);
+        }
     }
 }

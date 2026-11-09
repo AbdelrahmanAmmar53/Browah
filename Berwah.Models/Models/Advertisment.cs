@@ -67,5 +67,6 @@ namespace Berwah.Models.Models
         public ICollection<AdvertismentImage> AdvertismentImages { get; set; } = new List<AdvertismentImage>();
         public ICollection<AdvertisementSpecification> Specifications { get; set; } = new List<AdvertisementSpecification>();
         public ICollection<AdvertisementReview> Reviews { get; set; } = new List<AdvertisementReview>();
+        public ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
     }
 }

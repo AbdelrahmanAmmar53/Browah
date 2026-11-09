@@ -18,8 +18,11 @@ namespace Berwah.Models.Models
         public string Title { get; set; }
         public string Description { get; set; }
         public TicketStatus Status { get; set; }
+        public TicketFor For { get; set; }
         public DateTime CreatedAt { get; set; }
         public int? UserId { get; set; }
         public User User { get; set; }
+        public int? AdvertisementId { get; set; }
+        public Advertisment Advertisement { get; set; }
     }
 }

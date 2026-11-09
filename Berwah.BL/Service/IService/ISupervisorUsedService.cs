@@ -17,5 +17,16 @@ namespace Berwah.BL.Service.IService
         Task<bool> RequestEditFromPublisherAsync(int id, string? reason);
         Task<bool> SuspendAdAsync(int id, string? reason);
         Task<bool> RejectAdWithPenaltyAsync(int id, UsedAdActionDto dto);
+        Task<IEnumerable<object>> GetWosallyOrdersAsync(string? status, int page, int pageSize);
+        Task<object?> GetWosallyOrderDetailsAsync(int id);
+        Task<bool> ApproveAndRevealBuyerDataAsync(int id, WosallyActionDto dto);
+        Task<bool> SendJointAlertAsync(int id);
+
+        Task<IEnumerable<object>> GetComplaintsAsync(string? status, int page, int pageSize);
+        Task<bool> FollowUpComplaintAsync(int id, ComplaintActionForUsedDto dto);
+        Task<ComplaintDetailsResponseDto?> GetDetailedComplaintAsync(int id);
+        Task<bool> SendComplaintToSellerAsync(int id, ComplaintActionForUsedDto dto);
+        Task<bool> EscalateToBossAsync(int id, ComplaintActionForUsedDto dto);
+        Task<SupervisorWalletDto> GetWalletDataAsync(int supervisorId);
     }
 }

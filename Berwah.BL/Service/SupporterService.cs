@@ -32,7 +32,8 @@ namespace Berwah.BL.Service
                 Description = dto.Description,
                // TicketNumber = $"BM-{Random.Shared.Next(10000, 99999)}",
                 CreatedAt = DateTime.UtcNow,
-                Status = TicketStatus.InProgress
+                Status = TicketStatus.InProgress,
+                For = TicketFor.ForAdNew
             };
 
             await _supportRepo.CreateTicketAsync(ticket);
@@ -42,6 +43,7 @@ namespace Berwah.BL.Service
                 //TicketNumber = ticket.TicketNumber,
                 Title = ticket.Title,
                 Status = ticket.Status.ToString(),
+                For = ticket.For.ToString(),
                 CreatedAt = ticket.CreatedAt
             };
         }
@@ -55,6 +57,7 @@ namespace Berwah.BL.Service
                 //TicketNumber = t.TicketNumber,
                 Title = t.Title,
                 Status = t.Status.ToString(),
+                For = t.For.ToString(),
                 CreatedAt = t.CreatedAt
             });
         }

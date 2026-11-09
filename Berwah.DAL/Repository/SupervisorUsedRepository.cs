@@ -79,5 +79,98 @@ namespace Berwah.DAL.Repository
             _context.Advertisements.Update(ad);
             return await _context.SaveChangesAsync() > 0;
         }
+
+        // --- تنفيذ طلبات وصلني ---
+        public async Task<IEnumerable<Order>> GetWosallyOrdersAsync(string? statusFilter, int page, int pageSize)
+        {
+            var query = _context.Orders
+                .AsNoTracking()
+                .Include(o => o.User) 
+                                      
+                .AsQueryable();
+
+            if (!string.IsNullOrEmpty(statusFilter))
+            {
+                // فلترة حسب الحالة إن وجدت
+            }
+
+            return await query
+                .OrderByDescending(o => o.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+        }
+
+        public async Task<Order?> GetWosallyOrderByIdAsync(int id)
+        {
+            return await _context.Orders
+                .Include(o => o.User)
+                .FirstOrDefaultAsync(o => o.Id == id);
+        }
+
+        public async Task<bool> UpdateOrderAsync(Order order)
+        {
+            _context.Orders.Update(order);
+            return await _context.SaveChangesAsync() > 0;
+        }
+
+        // --- تنفيذ الشكاوي والبلاغات ---
+        public async Task<IEnumerable<Ticket>> GetComplaintsAsync(string? statusFilter, int page, int pageSize)
+        {
+            var query = _context.Tickets
+                .AsNoTracking()
+                .Include(t => t.User)
+                .Where(T => T.For == TicketFor.ForUsed)   
+                .AsQueryable();
+
+            if (!string.IsNullOrEmpty(statusFilter))
+            {
+                if (statusFilter.ToLower() == "in_review" || statusFilter.ToLower() == "inreview")
+                    query = query.Where(t => t.Status == TicketStatus.InProgress);
+                else if (statusFilter.ToLower() == "resolved" || statusFilter.ToLower() == "closed")
+                    query = query.Where(t => t.Status == TicketStatus.Closed);
+            }
+
+            return await query
+                .OrderByDescending(t => t.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+        }
+
+        public async Task<Ticket?> GetComplaintByIdAsync(int id)
+        {
+            return await _context.Tickets
+                .Include(t => t.User)
+                .FirstOrDefaultAsync(t => t.Id == id && t.For == TicketFor.ForUsed);
+        }
+
+        public async Task<bool> UpdateTicketAsync(Ticket ticket)
+        {
+            _context.Tickets.Update(ticket);
+            return await _context.SaveChangesAsync() > 0;
+        }
+
+        public async Task<Ticket?> GetDetailedComplaintAsync(int id)
+        {
+            return await _context.Tickets
+                .Include(t => t.User) // المشتري أو صاحب الشكوى
+                .Include(t => t.Advertisement) // لو الشكوى مرتبطة بإعلان
+                    .ThenInclude(a => a.AdvertismentImages)
+                        .ThenInclude(ai => ai.Image)
+                .Include(t => t.Advertisement)
+                    .ThenInclude(a => a.User) // البائع
+                .FirstOrDefaultAsync(t => t.Id == id && t.For == TicketFor.ForUsed);
+        }
+
+        public async Task<IEnumerable<Transaction>> GetWalletTransactionsAsync(int supervisorId)
+        {
+            return await _context.Transactions
+                .AsNoTracking()
+                .Where(t => t.UserId == supervisorId)
+                .OrderByDescending(t => t.CreatedAt)
+                .Take(10)
+                .ToListAsync();
+        }
     }
 }

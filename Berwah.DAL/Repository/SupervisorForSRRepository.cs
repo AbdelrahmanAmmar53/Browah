@@ -165,9 +165,10 @@ namespace Berwah.DAL.Repository
         public async Task<IEnumerable<Ticket>> GetComplaintsAsync(string status, int page, int pageSize)
         {
             var query = _context.Tickets
-                .AsNoTracking()
-                .Include(r => r.User)
-                .AsQueryable();
+               .AsNoTracking()
+               .Include(r => r.User)
+               .Where(r => r.For == TicketFor.ForService) 
+               .AsQueryable();
 
             if (status.ToLower() == "in_review" || status.ToLower() == "inreview")
             {

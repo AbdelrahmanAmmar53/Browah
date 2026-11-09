@@ -1139,6 +1139,9 @@ namespace Berwah.DAL.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AdvertisementId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -1149,6 +1152,9 @@ namespace Berwah.DAL.Migrations
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("For")
+                        .HasColumnType("int");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -1169,6 +1175,8 @@ namespace Berwah.DAL.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AdvertisementId");
 
                     b.HasIndex("UserId");
 
@@ -1992,9 +2000,15 @@ namespace Berwah.DAL.Migrations
 
             modelBuilder.Entity("Berwah.Models.Models.Ticket", b =>
                 {
+                    b.HasOne("Berwah.Models.Models.Advertisment", "Advertisement")
+                        .WithMany("Tickets")
+                        .HasForeignKey("AdvertisementId");
+
                     b.HasOne("Berwah.Models.Models.User", "User")
                         .WithMany("Tickets")
                         .HasForeignKey("UserId");
+
+                    b.Navigation("Advertisement");
 
                     b.Navigation("User");
                 });
@@ -2103,6 +2117,8 @@ namespace Berwah.DAL.Migrations
                     b.Navigation("Reviews");
 
                     b.Navigation("Specifications");
+
+                    b.Navigation("Tickets");
                 });
 
             modelBuilder.Entity("Berwah.Models.Models.Category", b =>
