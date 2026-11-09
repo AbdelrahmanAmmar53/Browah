@@ -185,6 +185,9 @@ namespace Berwah.BL.Service
         /// The whole order is ready for the courier only when every store's items are; as soon
         /// as one store starts, the order is being prepared.
         /// </summary>
+        /// <summary>Orders paid from the customer's wallet carry payment method 2.</summary>
+        private static bool IsWalletPaid(Order order) => (int)order.PaymentMethod == 2;
+
         private static void RecalculateOrderStatus(Order order)
         {
             // Once the courier has the goods (or the order ended) the stores no longer move it.
@@ -230,9 +233,14 @@ namespace Berwah.BL.Service
             }
             else if (model.NewStatus == "Cancelled")
             {
+                bool alreadyCancelled = order.Status == OrderStatus.Cancelled;
+                decimal walletRefund = !alreadyCancelled && IsWalletPaid(order) ? (decimal)order.TotalPrice : 0m;
                 order.Status = OrderStatus.Cancelled;
                 foreach (var item in order.OrderItems) item.MerchantStatus = OrderStatus.Cancelled;
                 order.ConditionStaus = "تم إلغاء الطلب من قبل المتجر";
+                await _merchantRepository.UpdateOrderAsync(order);
+                if (walletRefund > 0)
+                    await _merchantRepository.RecordWalletRefundAsync(order.UserId, walletRefund, order.Id, $"استرداد عن الطلب #{order.Id}");
             }
 
             await _merchantRepository.UpdateOrderAsync(order);
@@ -353,7 +361,11 @@ namespace Berwah.BL.Service
             {
                 refund = othersRemain ? ownSum : paidBefore;
                 if (refund > 0)
+                {
                     await _merchantRepository.RecordTransactionAsync(order.UserId, refund, "Refund", $"استرداد عن الطلب #{order.Id}");
+                    if (IsWalletPaid(order))
+                        await _merchantRepository.RecordWalletRefundAsync(order.UserId, refund, order.Id, $"استرداد عن الطلب #{order.Id}");
+                }
             }
 
             if (order.UserId > 0)

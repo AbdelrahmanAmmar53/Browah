@@ -82,12 +82,40 @@ namespace Berwah.DAL.Repository
         {
             var request = await _context.ServiceRequests.FirstOrDefaultAsync(r => r.Id == requestId);
             if (request == null) return false;
+            if (request.Status == ServiceRequestStatus.Completed || request.Status == ServiceRequestStatus.Cancelled)
+                return false;
 
-            // تحديث العرض المقبول أو المزود المعين للطلب
-            // يمكنك تعديل حقل المزود أو الـ AcceptedOfferId حسب هيكلة قاعدة البيانات لديك
+            var provider = await _context.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == newProviderId && (u.UserType == UserType.Merchant || u.UserType == UserType.Delivery));
+            if (provider == null) return false;
+
+            // المزود السابق (لو فيه) عرضه يتسحب.
+            if (request.AcceptedOfferId != null)
+            {
+                var previous = await _context.ServiceOffers.FirstOrDefaultAsync(o => o.Id == request.AcceptedOfferId);
+                if (previous != null)
+                {
+                    if (previous.ProviderId == newProviderId) return false;
+                    previous.Withdrawn = true;
+                }
+            }
+
+            // إسناد المشرف = عرض جديد بسعر الطلب التقديري ومقبول فورًا.
+            var offer = new ServiceOffer
+            {
+                ServiceRequestId = request.Id,
+                ProviderId = newProviderId,
+                Price = request.EstimatedPrice,
+                Description = string.IsNullOrWhiteSpace(reason) ? "إسناد من مشرف الخدمات" : $"إسناد من مشرف الخدمات: {reason}",
+                ExecutionPeriod = string.Empty,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.ServiceOffers.Add(offer);
+            await _context.SaveChangesAsync();
+
+            request.AcceptedOfferId = offer.Id;
+            request.ProviderDoneAt = null;
             request.Status = ServiceRequestStatus.Approved;
-
-            // تسجيل عملية إعادة الإسناد في جدول الملاحظات أو السجل الرقابي إذا أردت
             await _context.SaveChangesAsync();
             return true;
         }
@@ -113,6 +141,7 @@ namespace Berwah.DAL.Repository
                 IsVerified = u.IsVerified,
                 IsAvailable = !u.IsUnavailable,
                 Location = u.Address ?? "الرياض - حي الياسمين",
+                Phone = u.PhoneNumber ?? string.Empty,
                 CompletedTasksCount = _context.ServiceOffers.Count(f =>
                     f.ProviderId == u.Id &&
                     f.ServiceRequest.AcceptedOfferId == f.Id &&

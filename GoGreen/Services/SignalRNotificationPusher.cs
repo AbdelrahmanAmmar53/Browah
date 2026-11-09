@@ -26,6 +26,8 @@ namespace Berwah.Services
                 object toSend = payload;
                 string? pushTitle = null, pushTitleEn = null, pushMessage = null, pushMessageEn = null;
                 int notificationId = 0;
+                string pushType = "other";
+                int pushRef = 0;
                 if (JsonSerializer.SerializeToNode(payload) is JsonObject obj)
                 {
                     var title = obj["title"]?.GetValue<string>();
@@ -38,6 +40,8 @@ namespace Berwah.Services
                     pushMessage = message;
                     pushMessageEn = obj["messageEn"]?.GetValue<string>();
                     try { notificationId = obj["id"]?.GetValue<int>() ?? 0; } catch { }
+                    try { pushType = obj["type"]?.GetValue<string>() ?? "other"; } catch { }
+                    try { pushRef = obj["refId"]?.GetValue<int>() ?? 0; } catch { }
                 }
                 await _hub.Clients.User(userId.ToString()).SendAsync("ReceiveNotification", toSend);
 
@@ -45,7 +49,8 @@ namespace Berwah.Services
                 if (pushTitle != null && pushMessage != null)
                 {
                     var (a, b, c, d, e) = (pushTitle, pushTitleEn ?? "", pushMessage, pushMessageEn ?? "", notificationId);
-                    _ = Task.Run(() => _fcm.SendAsync(userId, a, b, c, d, e));
+                    var (ty, rf) = (pushType, pushRef);
+                    _ = Task.Run(() => _fcm.SendAsync(userId, a, b, c, d, e, ty, rf));
                 }
             }
             catch

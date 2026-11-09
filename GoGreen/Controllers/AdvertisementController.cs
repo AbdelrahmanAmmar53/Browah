@@ -54,6 +54,7 @@ namespace Berwah.Controllers
                 var result = await _advertisementService.CreateAdvertisementAsync(dto, userId);
                 if (paid)
                     await _promotions.CreatePurchaseAsync(result.Id, userId, dto.PromotionPlan, dto.PaymentMethod!.Value, dto.PaymentReference);
+                await _promotions.NotifySupervisorsAsync("إعلان جديد بانتظار المراجعة", string.IsNullOrWhiteSpace(result.Title) ? "وصل إعلان جديد" : $"إعلان «{result.Title}» بانتظار قرارك", "ad_review", result.Id);
                 return CreatedAtAction(nameof(GetAdvertisementById), new { id = result.Id }, new { status = "success", data = result, promotionPending = paid });
             }
             catch (Exception ex)

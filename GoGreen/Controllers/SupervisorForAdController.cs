@@ -1,17 +1,16 @@
-using Berwah.BL.Service.IService;
+﻿using Berwah.BL.Service.IService;
 using Berwah.Models.DTO;
 using Berwah.Models.DTO.SupervisorForAd;
 using Berwah.Models.Enum;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace Berwah.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin,SupervisorForAd,BossOfSupervisor")]
+    [Authorize(Roles = "SupervisorForAd,SupervisorUsed,BossOfSupervisor,Admin")]
     public class SupervisorForAdController : ControllerBase
     {
         private readonly ISupervisorForAdService _supervisorService;
@@ -48,134 +47,62 @@ namespace Berwah.Controllers
             return Ok(new { status = "success", message = "تم تحديث حالة الإعلان بنجاح" });
         }
 
-        // 4. جلب تفاصيل إعلان معين كاملة (شاشة تفاصيل الإعلان والتعديل)
-        [HttpGet("ad-details/{id}")]
-        public async Task<IActionResult> GetAdDetails(int id)
+        // 4. إعلانات بأي حالة (Pending / Approved / Rejected / Suspended)
+        [HttpGet("ads")]
+        public async Task<IActionResult> GetAdsByStatus([FromQuery] string status = "Pending", [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+        {
+            if (!Enum.TryParse<AdStatus>(status, true, out var parsed))
+                return BadRequest(new { status = "error", message = "حالة غير معروفة" });
+            if (page < 1) page = 1;
+            if (pageSize < 1 || pageSize > 200) pageSize = 50;
+            var result = await _supervisorService.GetAdsByStatusAsync(parsed, page, pageSize);
+            return Ok(new { status = "success", data = result });
+        }
+
+        // 5. تفاصيل إعلان
+        [HttpGet("ad/{id}")]
+        public async Task<IActionResult> GetAd(int id)
         {
             var ad = await _supervisorService.GetAdDetailsAsync(id);
-            if (ad == null)
-                return NotFound(new { status = "error", message = "الإعلان غير موجود" });
-
+            if (ad == null) return NotFound(new { status = "error", message = "الإعلان غير موجود" });
             return Ok(new { status = "success", data = ad });
         }
 
-        // 5. تعديل بيانات الإعلان من قبل المشرف
-        [HttpPut("update-ad/{id}")]
-        public async Task<IActionResult> UpdateAdDetails(int id, [FromBody] UpdateDetailAdDto dto)
+        // 6. تعديل بيانات الإعلان من المشرف
+        [HttpPut("ad/{id}")]
+        public async Task<IActionResult> UpdateAd(int id, [FromBody] UpdateDetailAdDto dto)
         {
-            var success = await _supervisorService.UpdateAdDetailsAsync(id, dto);
-            if (!success)
-                return BadRequest(new { status = "error", message = "فشل تعديل الإعلان أو الإعلان غير موجود" });
-
-            return Ok(new { status = "success", message = "تم تعديل تفاصيل الإعلان بنجاح" });
+            var ok = await _supervisorService.UpdateAdDetailsAsync(id, dto);
+            if (!ok) return BadRequest(new { status = "error", message = "تعذر تعديل الإعلان" });
+            return Ok(new { status = "success", message = "تم تعديل الإعلان" });
         }
 
-        // 6. رفض الإعلان مع الأسباب (نافذة سبب الرفض)
-        [HttpPost("reject-ad/{id}")]
-        public async Task<IActionResult> RejectAd(int id, [FromBody] RejectAdDto dto)
+        // 7. رفض مع سبب (يصل لصاحب الإعلان في إشعار)
+        [HttpPost("reject/{id}")]
+        public async Task<IActionResult> Reject(int id, [FromBody] RejectAdDto dto)
         {
-            var success = await _supervisorService.RejectAdWithReasonAsync(id, dto);
-            if (!success)
-                return BadRequest(new { status = "error", message = "فشل رفض الإعلان أو الإعلان غير موجود" });
-
-            return Ok(new { status = "success", message = "تم رفض الإعلان وإرسال سبب الرفض للمعلن" });
+            if (string.IsNullOrWhiteSpace(dto?.RejectReason))
+                return BadRequest(new { status = "error", message = "سبب الرفض مطلوب" });
+            var ok = await _supervisorService.RejectAdWithReasonAsync(id, dto);
+            if (!ok) return BadRequest(new { status = "error", message = "تعذر رفض الإعلان" });
+            return Ok(new { status = "success", message = "تم رفض الإعلان" });
         }
 
-        // 7. إخفاء / تعليق الإعلان (صفحة إخفاء الإعلان وإخطار الناشر)
-        [HttpPost("hide-ad/{id}")]
-        public async Task<IActionResult> HideAd(int id, [FromBody] HideAdDto dto)
+        // 8. إخفاء / تعليق مع رسالة لصاحب الإعلان
+        [HttpPost("hide/{id}")]
+        public async Task<IActionResult> Hide(int id, [FromBody] HideAdDto dto)
         {
-            var success = await _supervisorService.HideAdAsync(id, dto);
-            if (!success)
-                return BadRequest(new { status = "error", message = "فشل إخفاء الإعلان أو الإعلان غير موجود" });
-
-            return Ok(new { status = "success", message = "تم تعليق الإعلان وإرسال الإخطار للمعلن" });
+            var ok = await _supervisorService.HideAdAsync(id, dto);
+            if (!ok) return BadRequest(new { status = "error", message = "تعذر تعليق الإعلان" });
+            return Ok(new { status = "success", message = "تم تعليق الإعلان" });
         }
 
-        // 8. جلب تقارير قسم المنتجات الجديدة (اليوم، الأسبوع، الشهر، مخصص)
+        // 9. تقارير المراجعة (today / week / month / all)
         [HttpGet("reports")]
-        public async Task<IActionResult> GetReports([FromQuery] string period = "week")
+        public async Task<IActionResult> Reports([FromQuery] string period = "week")
         {
-            try
-            {
-                var report = await _supervisorService.GetReportsAsync(period);
-                return Ok(new { status = "success", data = report });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { status = "error", message = ex.Message });
-            }
-        }
-
-        // 9. تعديل وتنفيذ الإجراء الرقابي المتقدم (نافذة تعديل الحالة الرقابية)
-        [HttpPost("regulatory-action/{id}")]
-        public async Task<IActionResult> ExecuteRegulatoryAction(int id, [FromBody] RegulatoryActionDto dto)
-        {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-
-            try
-            {
-                var success = await _supervisorService.ExecuteRegulatoryActionAsync(id, dto);
-                if (!success)
-                    return NotFound(new { status = "error", message = "الإعلان غير موجود أو فشل التحديث" });
-
-                return Ok(new { status = "success", message = "تم حفظ وتحديث الحالة الرقابة للإعلان بنجاح" });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { status = "error", message = ex.Message });
-            }
-        }
-
-        // 10. جلب بيانات الملف الشخصي للمشرف والمؤشرات الرقابية
-        [HttpGet("profile")]
-        public async Task<IActionResult> GetSupervisorProfile()
-        {
-            var supervisorId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var profile = await _supervisorService.GetSupervisorProfileAsync(supervisorId);
-
-            if (profile == null)
-                return NotFound(new { status = "error", message = "المشرف غير موجود" });
-
-            return Ok(new { status = "success", data = profile });
-        }
-
-        // 11. تبديل حالة التواجد الميداني (متاح/غير متاح للفحص)
-        [HttpPost("toggle-availability")]
-        public async Task<IActionResult> ToggleAvailability([FromBody] ToggleAvailabilityDto dto)
-        {
-            var supervisorId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var success = await _supervisorService.ToggleAvailabilityAsync(supervisorId, dto.IsAvailable);
-
-            if (!success)
-                return BadRequest(new { status = "error", message = "فشل تحديث حالة التواجد" });
-
-            return Ok(new { status = "success", message = "تم تحديث الحالة الميدانية بنجاح" });
-        }
-
-        // 12. جلب محفظة المشرف والبيانات المالية والمعاملات الأخيرة
-        [HttpGet("wallet")]
-        public async Task<IActionResult> GetSupervisorWallet()
-        {
-            var supervisorId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var wallet = await _supervisorService.GetSupervisorWalletAsync(supervisorId);
-
-            return Ok(new { status = "success", data = wallet });
-        }
-
-        // 13. طلب سحب المستحقات المالية
-        [HttpPost("wallet/withdraw")]
-        public async Task<IActionResult> RequestWithdrawal([FromBody] WithdrawalRequestDtoAdmin dto)
-        {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-
-            var supervisorId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var success = await _supervisorService.RequestWithdrawalAsync(supervisorId, dto);
-
-            if (!success)
-                return BadRequest(new { status = "error", message = "فشل تنفيذ طلب السحب، تأكد من المبلغ" });
-
-            return Ok(new { status = "success", message = "تم تقديم طلب السحب المالي بنجاح وجاري المعالجة" });
+            var report = await _supervisorService.GetReportsAsync(period);
+            return Ok(new { status = "success", data = report });
         }
     }
 }

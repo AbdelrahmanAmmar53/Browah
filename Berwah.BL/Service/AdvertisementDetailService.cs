@@ -76,11 +76,11 @@ namespace Berwah.BL.Service
             // احسب الإحصائيات الأساسية فقط
             var totalAds = await _adRepository.GetAdvertisementCountByUserIdAsync(sellerId);
             var activeAds = await _context.Advertisements
-                .Where(a => a.UserId == sellerId)
+                .Where(a => a.UserId == sellerId && a.Status == Berwah.Models.Enum.AdStatus.Approved)
                 .CountAsync();
 
             var recentAds = await _context.Advertisements
-                .Where(a => a.UserId == sellerId)
+                .Where(a => a.UserId == sellerId && a.Status == Berwah.Models.Enum.AdStatus.Approved)
                 .Include(a => a.AdvertismentImages)
                     .ThenInclude(ai => ai.Image)
                 .OrderByDescending(a => a.CreatedAt)

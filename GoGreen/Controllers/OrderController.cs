@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Data;
 using System.Security.Claims;
 
 namespace Berwah.Controllers
@@ -104,11 +106,32 @@ namespace Berwah.Controllers
             }
         }
 
+        /// <summary>The customer's wallet balance: the sum of its lines.</summary>
+        private async Task<decimal> WalletBalanceAsync(int userId) =>
+            await _context.WalletEntries.Where(e => e.UserId == userId).SumAsync(e => (decimal?)e.Amount) ?? 0m;
+
+        /// <summary>Takes the order's total from the wallet and ends the checkout's transaction.</summary>
+        private async Task ChargeWalletAsync(Order order, IDbContextTransaction? tx)
+        {
+            if (tx == null) return;
+            _context.WalletEntries.Add(new WalletEntry
+            {
+                UserId = order.UserId,
+                Amount = -Math.Round((decimal)order.TotalPrice, 2),
+                Kind = "Payment",
+                Description = $"دفع الطلب #{order.Id}",
+                OrderId = order.Id
+            });
+            await _context.SaveChangesAsync();
+            await tx.CommitAsync();
+        }
+
         #region 2. Checkout (إتمام الطلب وفحص المنتجات المستعملة)
         [Authorize]
         [HttpPost("Checkout")]
         public async Task<IActionResult> Checkout([FromBody] CheckoutDto model)
         {
+            IDbContextTransaction? walletTx = null;
             try
             {
                 var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -181,6 +204,24 @@ namespace Berwah.Controllers
                 decimal deliveryFee = 30 + GeoZoneService.ExtraFeeFor(km);
                 decimal finalTotal = subTotal + deliveryFee;
 
+                // Paid from the wallet: the balance is checked and charged under one serializable
+                // transaction, so two orders placed together cannot spend the same money.
+                if ((int)model.PaymentMethod == 2)
+                {
+                    walletTx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+                    var balance = await WalletBalanceAsync(userId);
+                    finalTotal = Math.Round(finalTotal, 2);
+                    if (balance < finalTotal)
+                        return BadRequest(new
+                        {
+                            status = "error",
+                            code = "insufficient_wallet",
+                            balance,
+                            required = finalTotal,
+                            message = $"رصيد محفظتك ({balance:0.##} ج.م) لا يكفي لإتمام الطلب ({finalTotal:0.##} ج.م)"
+                        });
+                }
+
                 // What was bought leaves the server cart in the same save as the order.
                 var boughtIds = model.Items.Select(i => i.ProductId).ToList();
                 var cartRows = await _context.CartItems
@@ -211,6 +252,7 @@ namespace Berwah.Controllers
 
                     _context.Orders.Add(order);
                     await _context.SaveChangesAsync();
+                    await ChargeWalletAsync(order, walletTx);
 
                     var admins = await _userManager.GetUsersInRoleAsync("Admin");
                     foreach (var admin in admins)
@@ -240,6 +282,7 @@ namespace Berwah.Controllers
 
                     _context.Orders.Add(order);
                     await _context.SaveChangesAsync();
+                    await ChargeWalletAsync(order, walletTx);
 
                     await SafeNotifyAsync(order.UserId, "تم استلام طلبك ✅", $"تم إتمام طلبك رقم #{order.Id} وجاري تجهيزه.");
                     await NotifyStoresAndCouriersAsync(order);
@@ -256,6 +299,11 @@ namespace Berwah.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { status = "error", message = "حدث خطأ أثناء إتمام الطلب", details = ex.Message });
+            }
+            finally
+            {
+                // An unfinished wallet transaction (a refused or failed checkout) rolls back here.
+                if (walletTx != null) await walletTx.DisposeAsync();
             }
         }
         #endregion

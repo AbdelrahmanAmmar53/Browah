@@ -11,6 +11,7 @@ namespace Berwah.BL.Service.IService
     public interface ISupervisorForSRService
     {
         Task<IEnumerable<ServiceRequestDetailsDto>> GetPendingRequestsAsync(int page, int pageSize);
+        Task<IEnumerable<object>> GetRequestsByStatusAsync(string status, int page, int pageSize);
         Task<SupervisorServiceStatsDto> GetStatsAsync();
         Task<bool> ApproveRequestAsync(int id, ApproveServiceRequestDto dto);
         Task<bool> RejectRequestAsync(int id, RejectServiceRequestDto dto);

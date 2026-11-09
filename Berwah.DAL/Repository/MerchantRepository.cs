@@ -105,6 +105,21 @@ namespace Berwah.DAL.Repository
                 .ToDictionaryAsync(x => x.Key, x => x.Count);
         }
 
+        public async Task RecordWalletRefundAsync(int userId, decimal amount, int orderId, string description)
+        {
+            if (amount <= 0) return;
+            await _context.WalletEntries.AddAsync(new WalletEntry
+            {
+                UserId = userId,
+                Amount = amount,
+                Kind = "Refund",
+                Description = description,
+                OrderId = orderId,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<IEnumerable<User>> GetMerchantsByBusinessTypeAsync(string businessType)
         {
             return await _context.Users

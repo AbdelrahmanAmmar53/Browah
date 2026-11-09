@@ -16,6 +16,7 @@ namespace Berwah.Models.DTO.SupervisorForSR
         public bool IsVerified { get; set; }
         public bool IsAvailable { get; set; }
         public string Location { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
         public int CompletedTasksCount { get; set; }
     }
 }

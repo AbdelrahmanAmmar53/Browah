@@ -36,6 +36,8 @@ namespace Berwah.DAL.App
         public DbSet<SystemSetting> SystemSettings { get; set; }
         public DbSet<VisaCard> VisaCards { get; set; }
         public DbSet<Transaction> Transactions { get; set; }
+        public DbSet<WalletEntry> WalletEntries { get; set; }
+        public DbSet<WalletTopUp> WalletTopUps { get; set; }
         public DbSet<OrderIssue> OrderIssues { get; set; }
         public DbSet<StoreReview> StoreReviews { get; set; }
         public DbSet<DeviceToken> DeviceTokens { get; set; }
@@ -52,6 +54,24 @@ namespace Berwah.DAL.App
         {
             base.OnModelCreating(builder);
             builder.Entity<Advertisment>().ToTable("Advertisments");
+            builder.Entity<WalletEntry>(w =>
+            {
+                w.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+                w.Property(x => x.Kind).IsRequired().HasMaxLength(20);
+                w.Property(x => x.Description).HasMaxLength(200);
+                w.HasIndex(x => new { x.UserId, x.CreatedAt });
+                w.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            });
+            builder.Entity<WalletTopUp>(w =>
+            {
+                w.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+                w.Property(x => x.Method).IsRequired().HasMaxLength(40);
+                w.Property(x => x.ReferenceNumber).IsRequired().HasMaxLength(60);
+                w.Property(x => x.ProofImageUrl).HasMaxLength(500);
+                w.Property(x => x.RejectReason).HasMaxLength(300);
+                w.HasIndex(x => new { x.Method, x.ReferenceNumber });
+                w.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            });
             builder.Entity<CartItem>(c =>
             {
                 c.HasIndex(x => new { x.UserId, x.ProductId }).IsUnique();

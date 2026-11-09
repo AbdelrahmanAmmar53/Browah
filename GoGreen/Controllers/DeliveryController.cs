@@ -157,6 +157,10 @@ namespace Berwah.Controllers
 
         // One order as the radar and the trip show it. The courier's own position (when the app sent it)
         // gives the distance to the store; without positions no distance is shown rather than a made-up one.
+        /// <summary>What the captain earns from an order: its delivery fee, i.e. the total less the items still in it.</summary>
+        private static decimal DeliveryEarning(Order o) =>
+            Math.Max(0m, (decimal)o.TotalPrice - o.OrderItems.Where(i => i.MerchantStatus != OrderStatus.Cancelled).Sum(i => i.Price * i.Quantity));
+
         private DeliveryOrderDto BuildOrderDto(Order o, double? courierLat, double? courierLng, decimal share = 0.15m)
         {
             // The stores the order is picked up from (one per merchant in the cart).
@@ -211,7 +215,7 @@ namespace Berwah.Controllers
                 OrderId = o.Id,
                 OrderNumber = $"ORD-{o.Id}",
                 TotalPrice = (decimal)o.TotalPrice,
-                EarningAmount = Math.Round((decimal)o.TotalPrice * share, 2),
+                EarningAmount = Math.Round(DeliveryEarning(o), 2),
                 Currency = "ج.م",
                 OrderType = "توصيل طلبات متجر",
                 CategoryBadge = "نشط",
@@ -716,7 +720,7 @@ namespace Berwah.Controllers
                     itemsTotal,
                     deliveryFee = Math.Max(0m, total - itemsTotal),
                     total,
-                    earning = Math.Round(total * share, 2),
+                    earning = Math.Round(Math.Max(0m, total - itemsTotal), 2),
                     cashToCollect = o.PaymentMethod == PaymentMethod.Cash ? total : 0m
                 };
                 return Ok(new { status = "success", data });
@@ -763,7 +767,7 @@ namespace Berwah.Controllers
                         : stores.Count == 1 ? stores[0]
                         : $"{stores.Count} محلات: " + string.Join("، ", stores),
                     total = (decimal)o.TotalPrice,
-                    earning = Math.Round((decimal)o.TotalPrice * share, 2),
+                    earning = Math.Round(DeliveryEarning(o), 2),
                     cash = o.PaymentMethod == PaymentMethod.Cash,
                     dateText = at.ToString("dd/MM/yyyy hh:mm tt", System.Globalization.CultureInfo.InvariantCulture),
                     rating = o.CourierRating
@@ -931,6 +935,7 @@ namespace Berwah.Controllers
         private async Task<WalletFigures> LoadWalletAsync(int captainId)
         {
             var delivered = await _context.Orders.AsNoTracking()
+                .Include(o => o.OrderItems)
                 .Where(o => o.DeliveryId == captainId && o.Status == OrderStatus.Delivered)
                 .OrderByDescending(o => o.Id)
                 .ToListAsync();
@@ -942,7 +947,7 @@ namespace Berwah.Controllers
             return new WalletFigures(
                 delivered,
                 share,
-                delivered.Sum(o => (decimal)o.TotalPrice * share),
+                delivered.Sum(o => DeliveryEarning(o)),
                 moves.Where(t => t.Type == WithdrawType).Sum(t => t.Amount),
                 delivered.Where(o => o.PaymentMethod == PaymentMethod.Cash).Sum(o => (decimal)o.TotalPrice),
                 moves.Where(t => t.Type == DepositType).Sum(t => t.Amount),
@@ -959,7 +964,7 @@ namespace Berwah.Controllers
                 var w = await LoadWalletAsync(captainId);
 
                 DateTime When(Order o) => o.DeliveredAt ?? o.CreatedAt;
-                decimal Earn(IEnumerable<Order> list) => list.Sum(o => (decimal)o.TotalPrice * w.Share);
+                decimal Earn(IEnumerable<Order> list) => list.Sum(o => DeliveryEarning(o));
                 var today = DateTime.UtcNow.Date;
                 var todayOrders = w.Delivered.Where(o => When(o).Date == today).ToList();
                 var weekOrders = w.Delivered.Where(o => When(o) >= DateTime.UtcNow.AddDays(-7)).ToList();
@@ -975,7 +980,7 @@ namespace Berwah.Controllers
                     Id = o.Id,
                     Title = $"طلب توصيل #{o.Id}",
                     Subtitle = o.PaymentMethod == PaymentMethod.Cash ? $"كاش مستلم {o.TotalPrice} ج.م" : "دفع إلكتروني محفظة",
-                    Amount = (decimal)o.TotalPrice * w.Share,
+                    Amount = DeliveryEarning(o),
                     Type = "Earning",
                     DateText = When(o).ToString("dd/MM hh:mm tt"),
                     IsPositive = true

@@ -73,8 +73,15 @@ namespace Berwah.DAL.App
         public static async Task SeedSupervisorsAsync(UserManager<User> userManager)
         {
             // 1. مشرف الإعلانات
-            var adSupervisorEmail = "ad@berwah.com";
-            if (await userManager.FindByEmailAsync(adSupervisorEmail) == null)
+            var adSupervisorEmail = "yousifshaaban2872003@gmail.com";
+            var existingAdSupervisor = await userManager.FindByEmailAsync(adSupervisorEmail);
+            if (existingAdSupervisor != null)
+            {
+                // الحساب موجود بالفعل: نتأكد بس إن عنده دور مشرف الإعلانات (كلمة سره تفضل زي ما هي).
+                if (!await userManager.IsInRoleAsync(existingAdSupervisor, "SupervisorForAd"))
+                    await userManager.AddToRoleAsync(existingAdSupervisor, "SupervisorForAd");
+            }
+            else
             {
                 var adSupervisor = new User
                 {
@@ -98,8 +105,15 @@ namespace Berwah.DAL.App
             }
 
             // 2. مشرف الخدمات
-            var serviceSupervisorEmail = "service@berwah.com";
-            if (await userManager.FindByEmailAsync(serviceSupervisorEmail) == null)
+            var serviceSupervisorEmail = "yousifshaaban2972003@gmail.com";
+            var existingServiceSupervisor = await userManager.FindByEmailAsync(serviceSupervisorEmail);
+            if (existingServiceSupervisor != null)
+            {
+                // الحساب موجود بالفعل: نتأكد بس إن عنده دور مشرف الخدمات (كلمة سره تفضل زي ما هي).
+                if (!await userManager.IsInRoleAsync(existingServiceSupervisor, "SupervisorForServices"))
+                    await userManager.AddToRoleAsync(existingServiceSupervisor, "SupervisorForServices");
+            }
+            else
             {
                 var serviceSupervisor = new User
                 {

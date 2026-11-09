@@ -272,7 +272,29 @@ using System.Threading.Tasks;
                 CreatedAt = DateTime.UtcNow
             };
 
-            return await _homeRepository.AddServiceRequestAsync(serviceRequest);
+            var added = await _homeRepository.AddServiceRequestAsync(serviceRequest);
+            if (added)
+            {
+                // مشرفو الخدمات يعرفوا فورًا إن في طلب بانتظار المراجعة.
+                try
+                {
+                    var supervisorIds = await _db.Users
+                        .Where(u => u.UserRole.Any(ur => ur.Role.Name == "SupervisorForServices"))
+                        .Select(u => u.Id)
+                        .ToListAsync();
+                    foreach (var supervisorId in supervisorIds)
+                        await _notifications.SendNotificationAsync(new SendNotification
+                        {
+                            UserId = supervisorId,
+                            Title = "طلب خدمة جديد بانتظار المراجعة",
+                            Message = $"وصل الطلب #SRV-{serviceRequest.Id} وبانتظار قرارك.",
+                            Type = "service_review",
+                            RefId = serviceRequest.Id
+                        });
+                }
+                catch { }
+            }
+            return added;
         }
 
         /// <summary>Fills each request's option name (vehicle type, kind of work) in one query.</summary>

@@ -1,6 +1,7 @@
 ﻿using Berwah.BL.Service.IService;
 using Berwah.Models.DTO.SupervisorForAd;
 using Berwah.Models.DTO.SupervisorForSR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -9,6 +10,7 @@ namespace Berwah.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "SupervisorForServices,BossOfSupervisor,Admin")]
     public class SupervisorForSRController : ControllerBase
     {
         private readonly ISupervisorForSRService _service;
@@ -25,6 +27,14 @@ namespace Berwah.Controllers
         public async Task<IActionResult> GetPending([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {
             var result = await _service.GetPendingRequestsAsync(page, pageSize);
+            return Ok(new { status = "success", data = result });
+        }
+
+        // 1b. الطلبات حسب الحالة: pending | approved | rejected (للأرشيف)
+        [HttpGet("requests")]
+        public async Task<IActionResult> GetByStatus([FromQuery] string status = "pending", [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+        {
+            var result = await _service.GetRequestsByStatusAsync(status, page, pageSize);
             return Ok(new { status = "success", data = result });
         }
 

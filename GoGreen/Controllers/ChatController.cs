@@ -27,6 +27,8 @@ namespace Berwah.Controllers
         private const int KindService = 1;
         private const int KindOrder = 2;
         private const int KindDelivery = 3;
+        /// <summary>Product supervisor talking to the ad's owner while the ad waits for a decision.</summary>
+        private const int KindAdReview = 4;
 
         private readonly ApplicationDbContext _db;
         private readonly IHubContext<NotificationHub> _hub;
@@ -329,6 +331,17 @@ namespace Berwah.Controllers
                         return NotFound(new { status = "error", message = "المحادثة غير متاحة" });
                     }
                 }
+                else if (dto.Kind == KindAdReview)
+                {
+                    var isSupervisor = User.IsInRole("SupervisorForAd") || User.IsInRole("SupervisorUsed") || User.IsInRole("Admin") || User.IsInRole("BossOfSupervisor");
+                    if (!isSupervisor)
+                        return StatusCode(403, new { status = "error", message = "هذه المحادثة للمشرفين فقط" });
+                    var ad = await _db.Advertisements.AsNoTracking().FirstOrDefaultAsync(a => a.Id == dto.RefId);
+                    if (ad == null) return NotFound(new { status = "error", message = "الإعلان غير موجود" });
+                    peer = ad.UserId;
+                    if (peer == me)
+                        return BadRequest(new { status = "error", message = "لا يمكن بدء محادثة مع نفسك" });
+                }
                 else
                 {
                     return BadRequest(new { status = "error", message = "نوع المحادثة غير صحيح" });
@@ -359,7 +372,14 @@ namespace Berwah.Controllers
                     .Select(r => new { r.Id, r.Status, r.CompletedAt }).ToListAsync())
                     .ToDictionary(r => r.Id, r => (r.Status, r.CompletedAt));
 
-            var orderIds = list.Where(c => c.Kind != KindService).Select(c => c.RefId).Distinct().ToList();
+            var adIds = list.Where(c => c.Kind == KindAdReview).Select(c => c.RefId).Distinct().ToList();
+            var ads = adIds.Count == 0
+                ? new Dictionary<int, (AdStatus Status, DateTime? At)>()
+                : (await _db.Advertisements.AsNoTracking().Where(a => adIds.Contains(a.Id))
+                    .Select(a => new { a.Id, a.Status, a.ReviewedAt }).ToListAsync())
+                    .ToDictionary(a => a.Id, a => (a.Status, a.ReviewedAt));
+
+            var orderIds = list.Where(c => c.Kind == KindOrder || c.Kind == KindDelivery).Select(c => c.RefId).Distinct().ToList();
             var orders = orderIds.Count == 0
                 ? new Dictionary<int, (OrderStatus Status, DateTime? At)>()
                 : (await _db.Orders.AsNoTracking().Where(o => orderIds.Contains(o.Id))
@@ -372,6 +392,12 @@ namespace Berwah.Controllers
                 {
                     if (!services.TryGetValue(c.RefId, out var s)) { result[c.Id] = (true, null); continue; }
                     result[c.Id] = (s.Status == ServiceRequestStatus.Completed || s.Status == ServiceRequestStatus.Cancelled, s.Item2);
+                }
+                else if (c.Kind == KindAdReview)
+                {
+                    // Open only while the ad still waits for the supervisor's decision.
+                    if (!ads.TryGetValue(c.RefId, out var a)) { result[c.Id] = (true, null); continue; }
+                    result[c.Id] = (a.Status != AdStatus.Pending, a.Status != AdStatus.Pending ? a.Item2 : null);
                 }
                 else
                 {
@@ -414,7 +440,12 @@ namespace Berwah.Controllers
                 await _db.SaveChangesAsync();
             }
 
-            return Ok(new { status = "success", data = list, closed = await IsClosedAsync(c) });
+            // How far the other side has read what I sent: every message of mine up to this id was seen.
+            var readUpTo = await _db.ChatMessages.AsNoTracking()
+                .Where(m => m.ConversationId == id && m.SenderId == me && m.ReadAt != null)
+                .Select(m => (long?)m.Id).MaxAsync() ?? 0;
+
+            return Ok(new { status = "success", data = list, closed = await IsClosedAsync(c), readUpTo });
         }
 
         public class SendChatDto
@@ -451,7 +482,9 @@ namespace Berwah.Controllers
                     {
                         UserId = otherId,
                         Title = NameOf(sender),
-                        Message = text.Length > 120 ? text[..120] + "…" : text
+                        Message = text.Length > 120 ? text[..120] + "…" : text,
+                        Type = "chat",
+                        RefId = c.Id
                     });
                 }
                 catch { /* best effort */ }
@@ -510,7 +543,9 @@ namespace Berwah.Controllers
                     {
                         UserId = otherId,
                         Title = NameOf(sender),
-                        Message = caption.Length == 0 ? "📷 صورة" : "📷 " + (caption.Length > 110 ? caption[..110] + "…" : caption)
+                        Message = caption.Length == 0 ? "📷 صورة" : "📷 " + (caption.Length > 110 ? caption[..110] + "…" : caption),
+                        Type = "chat",
+                        RefId = c.Id
                     });
                 }
                 catch { /* best effort */ }

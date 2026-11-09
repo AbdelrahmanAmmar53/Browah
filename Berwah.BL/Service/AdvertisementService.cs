@@ -1,4 +1,4 @@
-using Berwah.BL.Service.IService;
+﻿using Berwah.BL.Service.IService;
 using Berwah.DAL.Repository.IRepository;
 using Berwah.Models.DTO;
 using Berwah.Models.Enum;
@@ -158,6 +158,7 @@ namespace Berwah.BL.Service
                 Condition = ad.Condition.ToString(),
                 SellerId= ad.UserId,
                 Status = ad.Status.ToString(),
+                ReviewNote = ad.ReviewNote,
                 Governorate = ad.Governorate,
                 City = ad.City,
                 CategoryId = ad.CategoryId,

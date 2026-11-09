@@ -27,6 +27,8 @@ namespace Berwah.Models.DTO
         public int SellerId { get; set; }
         /// <summary>Pending (under review) / Approved / Rejected / Suspended (frozen).</summary>
         public string Status { get; set; } = string.Empty;
+        /// <summary>Why the supervisor rejected / suspended the ad (shown to its owner).</summary>
+        public string? ReviewNote { get; set; }
         public List<SpecificationItemDto> Specifications { get; set; } = new();
     }
 }

@@ -52,7 +52,7 @@ namespace Berwah.Services
             }
         }
 
-        public async Task SendAsync(int userId, string title, string titleEn, string message, string messageEn, int notificationId)
+        public async Task SendAsync(int userId, string title, string titleEn, string message, string messageEn, int notificationId, string type = "other", int refId = 0)
         {
             if (_messaging == null) return;
             try
@@ -86,7 +86,10 @@ namespace Berwah.Services
                         Data = new Dictionary<string, string>
                         {
                             ["notificationId"] = notificationId.ToString(),
-                            ["route"] = "notifications"
+                            ["route"] = "notifications",
+                            ["type"] = type,
+                            ["refId"] = refId.ToString(),
+                            ["title"] = title
                         }
                     };
                 }).ToList();

@@ -3,6 +3,7 @@ using Berwah.DAL.App;
 using Berwah.Models.DTO;
 using Berwah.Models.Enum;
 using Berwah.Models.Models;
+using Berwah.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,11 +19,13 @@ namespace Berwah.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly INotificationService _notificationService;
+        private readonly WalletService _wallet;
 
-        public ServiceRequestsController(ApplicationDbContext context, INotificationService notificationService)
+        public ServiceRequestsController(ApplicationDbContext context, INotificationService notificationService, WalletService wallet)
         {
             _context = context;
             _notificationService = notificationService;
+            _wallet = wallet;
         }
 
         private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -271,6 +274,8 @@ namespace Berwah.Controllers
                 request.Status = ServiceRequestStatus.Completed;
                 request.CompletedAt = DateTime.UtcNow;
                 request.CustomerRating = rating;
+                // The price held for the job goes to the provider's wallet.
+                await _wallet.PayProviderAsync(request.Id, request.UserId, providerId.Value);
                 var review = dto?.Review?.Trim();
                 request.CustomerReview = string.IsNullOrEmpty(review) ? null : (review.Length > 500 ? review[..500] : review);
                 await _context.SaveChangesAsync();
@@ -309,6 +314,8 @@ namespace Berwah.Controllers
         /// <summary>Puts a chosen job back on the table: the request is open again and the other offers are still there.</summary>
         private async Task ReopenAsync(ServiceRequest request, int providerId, bool byCustomer)
         {
+            // The price held when the offer was accepted goes back to the customer's wallet.
+            await _wallet.ReleaseServiceHoldAsync(request.Id, request.UserId);
             var offer = await _context.ServiceOffers.FirstOrDefaultAsync(o => o.Id == request.AcceptedOfferId);
             if (offer != null) offer.Withdrawn = true;
             request.AcceptedOfferId = null;
@@ -559,9 +566,31 @@ namespace Berwah.Controllers
                 if (request.Status != ServiceRequestStatus.Pending)
                     return BadRequest(new { status = "error", message = "تم اختيار منفذ لهذا الطلب بالفعل أو أنه لم يعد متاحًا" });
 
+                // The offer's price is held from the customer's wallet until the job is confirmed.
+                if (!await _wallet.TryChargeAsync(request.UserId, offer.Price, $"حجز مبلغ الخدمة #{request.Id}", serviceRequestId: request.Id))
+                {
+                    var balance = await _wallet.BalanceAsync(request.UserId);
+                    return BadRequest(new
+                    {
+                        status = "error",
+                        code = "insufficient_wallet",
+                        balance,
+                        required = offer.Price,
+                        message = $"رصيد محفظتك ({balance:0.##} ج.م) لا يكفي لقبول هذا العرض ({offer.Price:0.##} ج.م)، اشحن محفظتك أولاً"
+                    });
+                }
+
                 request.AcceptedOfferId = offer.Id;
                 request.Status = ServiceRequestStatus.Approved;
-                await _context.SaveChangesAsync();
+                try
+                {
+                    await _context.SaveChangesAsync();
+                }
+                catch
+                {
+                    await _wallet.ReleaseServiceHoldAsync(request.Id, request.UserId);
+                    throw;
+                }
 
                 await _notificationService.SendNotificationAsync(new SendNotification
                 {

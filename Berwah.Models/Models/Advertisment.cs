@@ -50,6 +50,13 @@ namespace Berwah.Models.Models
 
         public bool IsActive { get; set; }
 
+        /// <summary>The supervisor's reason for the last decision (rejection / suspension reason). Cleared when approved.</summary>
+        [MaxLength(500)]
+        public string? ReviewNote { get; set; }
+
+        /// <summary>When the supervisor last acted on the ad.</summary>
+        public DateTime? ReviewedAt { get; set; }
+
         // Where the seller picked the ad's location on the map.
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }

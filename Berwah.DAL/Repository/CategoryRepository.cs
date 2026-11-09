@@ -59,7 +59,7 @@ namespace Berwah.DAL.Repository
                 .Include(a => a.AdvertismentImages)
                     .ThenInclude(ai => ai.Image)
                 .Include(a => a.Category)
-                .Where(a => a.SubCategoryId == subCategoryId && (a.ExpiresAt == null || a.ExpiresAt > DateTime.UtcNow) && !(a.User.UserName == "browah" || a.User.UserRole.Any(ur => ur.Role.Name == "Admin")))
+                .Where(a => a.Status == AdStatus.Approved && a.SubCategoryId == subCategoryId && (a.ExpiresAt == null || a.ExpiresAt > DateTime.UtcNow) && !(a.User.UserName == "browah" || a.User.UserRole.Any(ur => ur.Role.Name == "Admin")))
                 .OrderBy(a => (a.PromotionPlan == PromotionPlanType.VIP && a.PromotionEndsAt > DateTime.UtcNow) ? 0 : (a.PromotionPlan == PromotionPlanType.Featured && a.PromotionEndsAt > DateTime.UtcNow) ? 1 : 2)
                 .ThenByDescending(a => a.CreatedAt)
                 .Skip((page - 1) * pageSize)
@@ -84,7 +84,7 @@ namespace Berwah.DAL.Repository
                 .Include(a => a.AdvertismentImages)
                     .ThenInclude(ai => ai.Image)
                 .Include(a => a.Category)
-                .Where(a => a.CategoryId == categoryId && (a.ExpiresAt == null || a.ExpiresAt > DateTime.UtcNow) && !(a.User.UserName == "browah" || a.User.UserRole.Any(ur => ur.Role.Name == "Admin")));
+                .Where(a => a.Status == AdStatus.Approved && a.CategoryId == categoryId && (a.ExpiresAt == null || a.ExpiresAt > DateTime.UtcNow) && !(a.User.UserName == "browah" || a.User.UserRole.Any(ur => ur.Role.Name == "Admin")));
 
             if (!string.IsNullOrEmpty(conditionStr) && Enum.TryParse<ProductCondition>(conditionStr, true, out var conditionEnum))
             {
@@ -116,7 +116,7 @@ namespace Berwah.DAL.Repository
             return await _context.Advertisements
                 .Include(a => a.AdvertismentImages).ThenInclude(ai => ai.Image)
                 .Include(a => a.Specifications)
-                .Where(a => a.CategoryId == categoryId && (a.ExpiresAt == null || a.ExpiresAt > DateTime.UtcNow) && !(a.User.UserName == "browah" || a.User.UserRole.Any(ur => ur.Role.Name == "Admin")))
+                .Where(a => a.Status == AdStatus.Approved && a.CategoryId == categoryId && (a.ExpiresAt == null || a.ExpiresAt > DateTime.UtcNow) && !(a.User.UserName == "browah" || a.User.UserRole.Any(ur => ur.Role.Name == "Admin")))
                 .OrderBy(a => (a.PromotionPlan == PromotionPlanType.VIP && a.PromotionEndsAt > DateTime.UtcNow) ? 0 : (a.PromotionPlan == PromotionPlanType.Featured && a.PromotionEndsAt > DateTime.UtcNow) ? 1 : 2)
                 .ThenByDescending(a => a.CreatedAt)
                 .Skip((page - 1) * pageSize)

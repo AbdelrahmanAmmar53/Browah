@@ -23,11 +23,18 @@ namespace Berwah.BL.Service
         {
             var notifications = await _notificationRepository.GetNotificationHistoryAsync(userId);
 
-            return notifications.Select(n => new NotificationHistory
+            return notifications.Select(n =>
             {
-                Title = n.Title,
-                Message = n.Message,
-                CreatedAt = n.CreatedAt
+                var (type, refId) = NotificationTarget.Resolve(n.Title, n.Message);
+                return new NotificationHistory
+                {
+                    Id = n.Id,
+                    Title = n.Title,
+                    Message = n.Message,
+                    CreatedAt = n.CreatedAt,
+                    Type = type,
+                    RefId = refId
+                };
             });
         }
         public async Task SendNotificationAsync(SendNotification sendNotification)
@@ -44,12 +51,15 @@ namespace Berwah.BL.Service
             // Real time: the app that is open gets it now; the stored copy is for the list.
             if (_pusher != null)
             {
+                var (type, refId) = NotificationTarget.Resolve(notification.Title, notification.Message, sendNotification.Type, sendNotification.RefId);
                 await _pusher.PushAsync(notification.UserId, new
                 {
                     id = notification.Id,
                     title = notification.Title,
                     message = notification.Message,
-                    createdAt = notification.CreatedAt
+                    createdAt = notification.CreatedAt,
+                    type,
+                    refId
                 });
             }
         }

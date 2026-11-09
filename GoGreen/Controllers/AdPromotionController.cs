@@ -52,21 +52,37 @@ namespace Berwah.Controllers
             return Ok(new { status = "success", data = new { purchase!.Id, status = purchase.Status.ToString(), purchase.Amount } });
         }
 
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,SupervisorForAd,BossOfSupervisor,Accountant")]
+        [HttpGet("All")]
+        public async Task<IActionResult> All([FromQuery] string? status = null)
+        {
+            AdPromotionStatus? parsed = null;
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                if (!Enum.TryParse<AdPromotionStatus>(status, true, out var s))
+                    return BadRequest(new { status = "fail", message = "حالة غير معروفة" });
+                parsed = s;
+            }
+            return Ok(new { status = "success", data = await _promotions.ListAsync(parsed) });
+        }
+
+        [Authorize(Roles = "Admin,SupervisorForAd,BossOfSupervisor,Accountant")]
         [HttpGet("Pending")]
         public async Task<IActionResult> Pending() => Ok(new { status = "success", data = await _promotions.PendingAsync() });
 
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,SupervisorForAd,BossOfSupervisor,Accountant")]
         [HttpPost("{id}/Approve")]
         public async Task<IActionResult> Approve(int id) =>
             await _promotions.ApproveAsync(id)
                 ? Ok(new { status = "success" })
                 : NotFound(new { status = "fail", message = "الطلب غير موجود أو تمت مراجعته" });
 
-        [Authorize(Roles = "Admin")]
+        public class RejectPromotionRequest { public string? Reason { get; set; } }
+
+        [Authorize(Roles = "Admin,SupervisorForAd,BossOfSupervisor,Accountant")]
         [HttpPost("{id}/Reject")]
-        public async Task<IActionResult> Reject(int id) =>
-            await _promotions.RejectAsync(id)
+        public async Task<IActionResult> Reject(int id, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] RejectPromotionRequest? body = null) =>
+            await _promotions.RejectAsync(id, body?.Reason)
                 ? Ok(new { status = "success" })
                 : NotFound(new { status = "fail", message = "الطلب غير موجود أو تمت مراجعته" });
     }

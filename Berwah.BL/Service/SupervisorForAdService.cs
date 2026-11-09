@@ -35,6 +35,11 @@ namespace Berwah.BL.Service
                 Price = a.Price,
                 Status = a.Status.ToString(),
                 CreatedAt = a.CreatedAt,
+                SellerId = a.UserId,
+                CategoryId = a.CategoryId,
+                SubCategoryId = a.SubCategoryId,
+                ReviewNote = a.ReviewNote,
+                ReviewedAt = a.ReviewedAt,
                 SellerName = a.User != null ? $"{a.User.FirstName} {a.User.LastName}" : "مستخدم",
                 ImageUrls = a.AdvertismentImages?.Select(ai => ai.Image?.Url ?? "").ToList() ?? new()
             });
@@ -62,6 +67,10 @@ namespace Berwah.BL.Service
             if (ad == null) return false;
 
             ad.Status = status;
+            ad.ReviewedAt = DateTime.UtcNow;
+            if (status == AdStatus.Approved) ad.ReviewNote = null;
+            if (status == AdStatus.Approved && (ad.ExpiresAt == null || ad.ExpiresAt <= DateTime.UtcNow))
+                ad.ExpiresAt = DateTime.UtcNow.AddDays(AdPromotionRules.AdLifetimeDays);
             var ok = await _supervisorRepo.UpdateAsync(ad);
             if (ok)
             {
@@ -92,6 +101,11 @@ namespace Berwah.BL.Service
                 Price = a.Price,
                 Status = a.Status.ToString(),
                 CreatedAt = a.CreatedAt,
+                SellerId = a.UserId,
+                CategoryId = a.CategoryId,
+                SubCategoryId = a.SubCategoryId,
+                ReviewNote = a.ReviewNote,
+                ReviewedAt = a.ReviewedAt,
                 SellerName = a.User != null ? $"{a.User.FirstName} {a.User.LastName}" : "مستخدم",
                 ImageUrls = a.AdvertismentImages?.Select(ai => ai.Image?.Url ?? "").ToList() ?? new()
             };
@@ -106,7 +120,8 @@ namespace Berwah.BL.Service
             ad.Title = dto.Title;
             ad.Description = dto.Description;
             ad.Price = dto.Price;
-            ad.CategoryId = dto.CategoryId;
+            if (dto.CategoryId > 0) ad.CategoryId = dto.CategoryId;
+            if (dto.SubCategoryId > 0) ad.SubCategoryId = dto.SubCategoryId;
 
             return await _supervisorRepo.UpdateAsync(ad);
         }
@@ -118,7 +133,10 @@ namespace Berwah.BL.Service
             if (ad == null) return false;
 
             ad.Status = AdStatus.Rejected;
-            // يمكنك حفظ سبب الرفض في حقل مخصص إذا أضفته لجدول الـ Advertisement
+            ad.ReviewNote = string.IsNullOrWhiteSpace(dto.SupervisorNotes)
+                ? dto.RejectReason.Trim()
+                : $"{dto.RejectReason.Trim()} - {dto.SupervisorNotes.Trim()}";
+            ad.ReviewedAt = DateTime.UtcNow;
             var updated = await _supervisorRepo.UpdateAsync(ad);
 
             if (updated && ad.UserId > 0)
@@ -144,6 +162,8 @@ namespace Berwah.BL.Service
             if (ad == null) return false;
 
             ad.Status = AdStatus.Suspended;
+            ad.ReviewNote = dto.NotificationMessage?.Trim();
+            ad.ReviewedAt = DateTime.UtcNow;
             var updated = await _supervisorRepo.UpdateAsync(ad);
 
             if (updated && ad.UserId > 0)
@@ -163,6 +183,14 @@ namespace Berwah.BL.Service
             }
             return updated;
         }
+        private static string AgoText(TimeSpan span)
+        {
+            if (span.TotalMinutes < 1) return "الآن";
+            if (span.TotalMinutes < 60) return $"منذ {(int)span.TotalMinutes} دقيقة";
+            if (span.TotalHours < 24) return $"منذ {(int)span.TotalHours} ساعة";
+            return $"منذ {(int)span.TotalDays} يوم";
+        }
+
         public async Task<AdReportResponse> GetReportsAsync(string period)
         {
             DateTime? startDate = period.ToLower() switch
@@ -201,8 +229,8 @@ namespace Berwah.BL.Service
                 AdNumber = $"#AD-{a.Id}",
                 Title = a.Title,
                 ActionType = a.Status == AdStatus.Approved ? "اعتماد إعلان" : (a.Status == AdStatus.Rejected ? "رفض إعلان" : "إخفاء إعلان"),
-                Reason = a.Status == AdStatus.Rejected ? "مخالفة معايير المنتجات الجديدة" : "مطابقة مستوى دقة شروط الجديد",
-                TimeAgo = $"{Math.Max(1, (DateTime.UtcNow - a.CreatedAt).Minutes)} دقائق"
+                Reason = a.Status == AdStatus.Rejected ? "مخالفة معايير النشر" : a.Status == AdStatus.Approved ? "مطابق لشروط النشر" : "تعليق مؤقت",
+                TimeAgo = AgoText(DateTime.UtcNow - a.CreatedAt)
             }).ToList();
 
             return new AdReportResponse
@@ -210,7 +238,7 @@ namespace Berwah.BL.Service
                 AdsCount = totalExamined,
                 ApprovalRate = approvalRate,
                 RejectionRate = rejectionRate,
-                AverageCheckSpeedMinutes = 3.8,
+                AverageCheckSpeedMinutes = 0, // غير متاح: لا نخزّن وقت المراجعة
                 CategoryDistributions = categoriesData.OrderByDescending(c => c.AdsCount).ToList(),
                 RecentLogs = recentLogs
             };
@@ -221,6 +249,10 @@ namespace Berwah.BL.Service
             if (ad == null) return false;
 
             ad.Status = dto.Status;
+            ad.ReviewedAt = DateTime.UtcNow;
+            ad.ReviewNote = dto.Status == AdStatus.Approved ? null : dto.SupervisorNotes?.Trim();
+            if (dto.Status == AdStatus.Approved && (ad.ExpiresAt == null || ad.ExpiresAt <= DateTime.UtcNow))
+                ad.ExpiresAt = DateTime.UtcNow.AddDays(AdPromotionRules.AdLifetimeDays);
             var updated = await _supervisorRepo.UpdateAsync(ad);
 
             if (updated && dto.SendInstantNotification && ad.UserId > 0)

@@ -12,11 +12,13 @@ namespace Berwah.Services
     {
         private readonly ApplicationDbContext _db;
         private readonly INotificationService _notifications;
+        private readonly WalletService _wallet;
 
-        public AdPromotionService(ApplicationDbContext db, INotificationService notifications)
+        public AdPromotionService(ApplicationDbContext db, INotificationService notifications, WalletService wallet)
         {
             _db = db;
             _notifications = notifications;
+            _wallet = wallet;
         }
 
         /// <summary>The message to answer with when the request is not acceptable; null when it is.</summary>
@@ -25,8 +27,18 @@ namespace Berwah.Services
             if (plan == PromotionPlanType.Free) return null;
             if (!Enum.IsDefined(typeof(PromotionPlanType), plan)) return "الباقة غير صالحة";
             if (method == null || !Enum.IsDefined(typeof(AdPaymentMethod), method.Value)) return "اختر طريقة الدفع";
+            if (method == AdPaymentMethod.Wallet) return null; // nothing to type: it comes out of the wallet
             if (string.IsNullOrWhiteSpace(reference)) return "أدخل بيانات الدفع";
             return null;
+        }
+
+        /// <summary>The message to answer with when the wallet can't pay for the plan; null when it can (or isn't the method).</summary>
+        public async Task<string?> WalletShortfallAsync(int userId, PromotionPlanType plan, AdPaymentMethod? method)
+        {
+            if (method != AdPaymentMethod.Wallet || plan == PromotionPlanType.Free) return null;
+            var price = AdPromotionRules.PriceOf(plan);
+            var balance = await _wallet.BalanceAsync(userId);
+            return balance < price ? $"رصيد محفظتك ({balance:0.##} ج.م) لا يكفي لهذه الباقة ({price:0.##} ج.م)" : null;
         }
 
         public async Task<AdPromotionPurchase> CreatePurchaseAsync(int adId, int userId, PromotionPlanType plan, AdPaymentMethod method, string? reference)
@@ -45,6 +57,21 @@ namespace Berwah.Services
             _db.AdPromotionPurchases.Add(purchase);
             await _db.SaveChangesAsync();
 
+            // Paid from the wallet: the money is taken now and the plan starts at once.
+            if (method == AdPaymentMethod.Wallet)
+            {
+                var paid = await _wallet.TryChargeAsync(userId, purchase.Amount, $"باقة إعلان ({(plan == PromotionPlanType.VIP ? "VIP" : "مميز")})");
+                if (!paid)
+                {
+                    purchase.Status = AdPromotionStatus.Rejected;
+                    purchase.ReviewedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync();
+                    return purchase;
+                }
+                await ApproveAsync(purchase.Id);
+                return purchase;
+            }
+
             try
             {
                 await _notifications.SendNotificationAsync(new SendNotification
@@ -55,7 +82,23 @@ namespace Berwah.Services
                 });
             }
             catch { }
+            await NotifySupervisorsAsync("طلب باقة جديد", $"طلب باقة {(plan == PromotionPlanType.VIP ? "VIP" : "مميز")} بقيمة {purchase.Amount:0.##} ج.م بانتظار المراجعة.");
             return purchase;
+        }
+
+        /// <summary>Tells every ads supervisor that something waits for them.</summary>
+        public async Task NotifySupervisorsAsync(string title, string message, string? type = null, int? refId = null)
+        {
+            try
+            {
+                var ids = await _db.Users
+                    .Where(u => u.UserRole.Any(ur => ur.Role.Name == "SupervisorForAd"))
+                    .Select(u => u.Id)
+                    .ToListAsync();
+                foreach (var id in ids)
+                    await _notifications.SendNotificationAsync(new SendNotification { UserId = id, Title = title, Message = message, Type = type, RefId = refId });
+            }
+            catch { }
         }
 
         /// <summary>Asks for a plan on an ad that already exists. Returns an error message, or null with the purchase.</summary>
@@ -74,7 +117,12 @@ namespace Berwah.Services
             if (await _db.AdPromotionPurchases.AnyAsync(p => p.AdvertismentId == adId && p.Status == AdPromotionStatus.Pending))
                 return ("يوجد طلب باقة قيد المراجعة لهذا الإعلان", null);
 
+            var shortfall = await WalletShortfallAsync(userId, plan, method);
+            if (shortfall != null) return (shortfall, null);
+
             var purchase = await CreatePurchaseAsync(adId, userId, plan, method!.Value, reference);
+            if (method == AdPaymentMethod.Wallet && purchase.Status == AdPromotionStatus.Rejected)
+                return ("رصيد محفظتك لا يكفي لهذه الباقة", null);
             return (null, purchase);
         }
 
@@ -95,6 +143,33 @@ namespace Berwah.Services
                     PaymentMethod = p.PaymentMethod.ToString(),
                     p.PaymentReference,
                     p.CreatedAt
+                })
+                .ToListAsync();
+            return rows.Cast<object>().ToList();
+        }
+
+        /// <summary>Every request of a status (null = all), newest first, with who asked and how they paid.</summary>
+        public async Task<List<object>> ListAsync(AdPromotionStatus? status, int take = 200)
+        {
+            var query = _db.AdPromotionPurchases.AsNoTracking().AsQueryable();
+            if (status.HasValue) query = query.Where(p => p.Status == status.Value);
+            var rows = await query
+                .OrderByDescending(p => p.CreatedAt)
+                .Take(take)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.AdvertismentId,
+                    AdTitle = p.Advertisment!.Title,
+                    p.UserId,
+                    UserName = p.User != null ? (p.User.FirstName + " " + p.User.LastName) : "",
+                    Plan = p.Plan.ToString(),
+                    p.Amount,
+                    PaymentMethod = p.PaymentMethod.ToString(),
+                    p.PaymentReference,
+                    Status = p.Status.ToString(),
+                    p.CreatedAt,
+                    p.ReviewedAt
                 })
                 .ToListAsync();
             return rows.Cast<object>().ToList();
@@ -124,7 +199,7 @@ namespace Berwah.Services
             return true;
         }
 
-        public async Task<bool> RejectAsync(int purchaseId)
+        public async Task<bool> RejectAsync(int purchaseId, string? reason = null)
         {
             var purchase = await _db.AdPromotionPurchases.Include(p => p.Advertisment).FirstOrDefaultAsync(p => p.Id == purchaseId);
             if (purchase == null || purchase.Status != AdPromotionStatus.Pending) return false;
@@ -142,7 +217,9 @@ namespace Berwah.Services
                 {
                     UserId = purchase.UserId,
                     Title = "تعذّر تفعيل الباقة",
-                    Message = "لم يتم اعتماد الدفع، وإعلانك يعمل كإعلان عادي. يمكنك طلب الباقة مرة أخرى."
+                    Message = string.IsNullOrWhiteSpace(reason)
+                        ? "لم يتم اعتماد الدفع، وإعلانك يعمل كإعلان عادي. يمكنك طلب الباقة مرة أخرى."
+                        : $"لم يتم اعتماد الباقة. السبب: {reason.Trim()}. إعلانك يعمل كإعلان عادي ويمكنك طلب الباقة مرة أخرى."
                 });
             }
             catch { }

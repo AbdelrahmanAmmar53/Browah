@@ -1,4 +1,4 @@
-using Berwah.Models.Enum;
+﻿using Berwah.Models.Enum;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -9,7 +9,9 @@ namespace Berwah.Models.Enum
     {
         Card = 1,
         EWallet = 2,
-        InstaPay = 3
+        InstaPay = 3,
+        /// <summary>Paid from the customer's wallet: the plan starts at once.</summary>
+        Wallet = 4
     }
 
     public enum AdPromotionStatus
@@ -55,10 +57,10 @@ namespace Berwah.Models.Models
         /// <summary>How long an ad is shown, counted from its approval.</summary>
         public const int AdLifetimeDays = 15;
         /// <summary>
-        /// While the supervisors' accounts are being set up, a new ad is published at once instead of
-        /// waiting for approval. Set to false to go back to supervisor approval.
+        /// false: no ad is published before the ads supervisor approves it (the rule).
+        /// true: publish at once (only while no supervisor account exists).
         /// </summary>
-        public static bool AutoApproveAds { get; } = true;
+        public static bool AutoApproveAds { get; } = false;
 
         /// <summary>The most VIP ads shown at the top of the home screen.</summary>
         public const int MaxVipOnHome = 5;

@@ -17,6 +17,8 @@ namespace Berwah.DAL.Repository.IRepository
         Task RecordMerchantPenaltyTransactionAsync(int merchantId, decimal penaltyAmount, string reason);
         Task<List<User>> GetActiveCouriersAsync();
         Task RecordTransactionAsync(int userId, decimal amount, string type, string description);
+        /// <summary>Puts money back into the customer's wallet (a refund of an order paid from it).</summary>
+        Task RecordWalletRefundAsync(int userId, decimal amount, int orderId, string description);
         Task<int> GetActiveProductsCountAsync(int merchantId);
         Task<IEnumerable<User>> GetMerchantsByBusinessTypeAsync(string businessType);
         /// <summary>How many customer reviews each of these stores has.</summary>

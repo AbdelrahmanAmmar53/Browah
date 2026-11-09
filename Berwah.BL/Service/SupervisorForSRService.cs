@@ -41,6 +41,25 @@ namespace Berwah.BL.Service
                 CreatedAt = r.CreatedAt
             });
         }
+        public async Task<IEnumerable<object>> GetRequestsByStatusAsync(string status, int page, int pageSize)
+        {
+            // جلب الطلبات من الـ Repository وتصفيتها حسب الحالة
+            var requests = await _repo.GetRequestsByStatusAsync(Enum.Parse<ServiceRequestStatus>(status), page, pageSize);
+
+            return requests.Select(r => new ServiceRequestDetailsDto
+            {
+                Id = r.Id,
+                RequestNumber = $"#SRV-{r.Id}",
+                SubCategoryName = r.SubCategory?.Name ?? "خدمة عامة",
+                ClientName = r.User != null ? $"{r.User.FirstName} {r.User.LastName}" : "عميل",
+                ClientAddress = r.DeliveryAddress ?? r.PickupAddress ?? "العنوان غير محدد",
+                ClientPhone = r.User?.PhoneNumber ?? "",
+                EstimatedPrice = r.EstimatedPrice,
+                Description = r.Description,
+                Status = r.Status.ToString(),
+                CreatedAt = r.CreatedAt
+            });
+        }
 
         public async Task<SupervisorServiceStatsDto> GetStatsAsync()
         {
@@ -165,6 +184,9 @@ namespace Berwah.BL.Service
 
         public async Task<bool> ReassignRequestAsync(int requestId, ReassignServiceRequestDto dto)
         {
+            var before = await _repo.GetByIdAsync(requestId);
+            var customerId = before?.UserId ?? 0;
+
             var success = await _repo.ReassignRequestToNewProviderAsync(requestId, dto.NewProviderId, dto.ReassignmentReason);
 
             if (success && dto.SendInstantNotification)
@@ -177,6 +199,13 @@ namespace Berwah.BL.Service
                         Title = "طلب إسناد خدمة جديد 🛠️",
                         Message = $"تم إسناد الطلب رقم #SRV-{requestId} إليك. يرجى المباشرة."
                     });
+                    if (customerId > 0)
+                        await _notifications.SendNotificationAsync(new SendNotification
+                        {
+                            UserId = customerId,
+                            Title = "تم إسناد طلبك لمقدم خدمة",
+                            Message = $"تم إسناد طلبك #SRV-{requestId} لمقدم خدمة من قبل الإدارة."
+                        });
                 }
                 catch { }
             }

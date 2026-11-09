@@ -44,6 +44,7 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IHomeService, HomeService>();
 builder.Services.AddScoped<IAdvertismentService, AdvertisementService>();
 builder.Services.AddScoped<IAdvertisementDetailService, AdvertisementDetailService>();
+builder.Services.AddScoped<Berwah.Services.WalletService>();
 builder.Services.AddScoped<Berwah.Services.AdPromotionService>();
 builder.Services.AddSingleton<Berwah.Services.GeoZoneService>();
 builder.Services.AddScoped<IMerchantService, MerchantService>();

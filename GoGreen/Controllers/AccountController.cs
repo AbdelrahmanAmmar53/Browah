@@ -138,6 +138,12 @@ namespace Berwah.Controllers
             var normalizedEmail = email.Trim().ToLower();
             var normalizedPhone = phone.Trim();
 
+            // An Egyptian mobile number: 11 digits starting 010, 011, 012 or 015 (also accepted as +20 / 20 followed by the same without the 0).
+            var phoneDigits = new string(normalizedPhone.Where(char.IsDigit).ToArray());
+            if (phoneDigits.StartsWith("20") && phoneDigits.Length == 12) phoneDigits = "0" + phoneDigits[2..];
+            if (!System.Text.RegularExpressions.Regex.IsMatch(phoneDigits, @"^01[0125][0-9]{8}$"))
+                return BadRequest(new { status = "error", message = "رقم الهاتف يجب أن يكون 11 رقمًا ويبدأ بـ 010 أو 011 أو 012 أو 015" });
+
             if (password != confirmPassword)
                 return BadRequest(new { status = "error", message = "كلمة المرور وتأكيد كلمة المرور غير متطابقين" });
 
@@ -1122,8 +1128,8 @@ namespace Berwah.Controllers
                     return NotFound(new { status = "error", message = "المستخدم غير موجود" });
 
                 var newPhone = (model?.NewPhone ?? string.Empty).Trim();
-                if (!System.Text.RegularExpressions.Regex.IsMatch(newPhone, @"^01[0-9]{9}$"))
-                    return BadRequest(new { status = "error", message = "رقم الهاتف غير صحيح" });
+                if (!System.Text.RegularExpressions.Regex.IsMatch(newPhone, @"^01[0125][0-9]{8}$"))
+                    return BadRequest(new { status = "error", message = "رقم الهاتف يجب أن يكون 11 رقمًا ويبدأ بـ 010 أو 011 أو 012 أو 015" });
                 if (newPhone == user.PhoneNumber)
                     return BadRequest(new { status = "error", message = "هذا هو رقمك الحالي بالفعل" });
                 if (await _context.Users.AnyAsync(u => u.PhoneNumber == newPhone))
